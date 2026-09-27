@@ -1,0 +1,654 @@
+// Prisma Schema for Candy & Cigarette Management System
+// Target Database: PostgreSQL 16+
+// Architecture: Single-Tenant (Dedicated Client Deployment)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  SALESMAN
+}
+
+enum PersonType {
+  SALESMAN
+  DEALER
+  STAFF
+}
+
+enum ProductCategory {
+  CANDY
+  CIGARETTE
+}
+
+enum Uom {
+  JAR
+  POCKET
+  M
+  CASE
+  PACKET
+  HANGER
+  BOX
+}
+
+// ============================================================
+// CORE MODELS
+// ============================================================
+
+/// User represents an authenticated application user with login credentials.
+/// BUSINESS RULE: Dealers MUST NOT have a User record. Only ADMIN and SALESMAN log in.
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String    @map("password_hash")
+  role         UserRole
+  personId     String?   @unique @map("person_id")
+  person       Person?   @relation(fields: [personId], references: [id], onDelete: SetNull)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+  @@index([role])
+  @@index([isActive])
+}
+
+/// Person represents human business entities: Salesmen, Dealers, and Staff.
+/// Dealer is an Admin-managed record and has NO login credentials.
+model Person {
+  id        String     @id @default(uuid())
+  name      String
+  phone     String?
+  address   String?
+  type      PersonType
+  active    Boolean    @default(true)
+  user      User?
+  salesTargets SalesTarget[]
+  salesmanIssues IssueStock[] @relation("SalesmanIssues")
+  dealerIssues   IssueStock[] @relation("DealerIssues")
+  salesmanHandovers DailyHandover[] @relation("SalesmanHandovers")
+  dealerHandovers   DailyHandover[] @relation("DealerHandovers")
+  salesmanLedgerTransactions SalesmanLedgerTransaction[] @relation("SalesmanLedger")
+  attendances SalesmanAttendance[] @relation("SalesmanAttendance")
+  salaries SalesmanSalary[] @relation("SalesmanSalary")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("persons")
+  @@index([type])
+  @@index([active])
+  @@index([phone])
+}
+
+/// Product represents the approved master catalog for Candy and Cigarettes.
+/// IMPORTANT BUSINESS RULE: There are NO emptyPocketRate, couponRate,
+/// emptyPocketValue, or couponValue columns here. Allowances are transaction-level.
+model Product {
+  id                    String                @id @default(uuid())
+  sku                   String?               @unique
+  name                  String
+  category              ProductCategory
+  brand                 String
+  baseUom               Uom                   @map("base_uom")
+  salesUom              Uom                   @map("sales_uom")
+  purchaseUom           Uom                   @map("purchase_uom")
+  standardPurchasePrice Decimal               @map("standard_purchase_price") @db.Decimal(12, 2)
+  salesRate             Decimal               @map("sales_rate") @db.Decimal(12, 2)
+  active                Boolean               @default(true)
+  uomConversions        ProductUomConversion[]
+  initialStock          InitialStock?
+  purchaseInvoiceItems  PurchaseInvoiceItem[]
+  stockMovements        StockMovement[]
+  salesTargetProducts   SalesTargetProduct[]
+  issueStockItems       IssueStockItem[]
+  handoverItems         DailyHandoverItem[]
+  handoverEmptyPackets  DailyHandoverEmptyPacket[]
+  handoverCoupons       DailyHandoverCoupon[]
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+
+  @@map("products")
+  @@index([category])
+  @@index([brand])
+  @@index([active])
+}
+
+/// ProductUomConversion defines product-specific unit conversions.
+/// For cigarette: 1 M = 100 Packets (standard). Case conversion is product-specific.
+/// For candy: 1 Jar = 1 base unit.
+model ProductUomConversion {
+  id               String   @id @default(uuid())
+  productId        String   @map("product_id")
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fromUom          Uom      @map("from_uom")
+  toUom            Uom      @map("to_uom")
+  conversionFactor Decimal  @map("conversion_factor") @db.Decimal(12, 4)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([productId, fromUom, toUom])
+  @@map("product_uom_conversions")
+  @@index([productId])
+}
+
+/// InitialStock represents opening stock entered once for a product.
+/// Strictly single-tenant, belongs directly to product.
+model InitialStock {
+  id         String   @id @default(uuid())
+  productId  String   @unique @map("product_id")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity   Decimal  @db.Decimal(12, 2)
+  uom        Uom
+  createdBy  String?  @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("initial_stocks")
+  @@index([productId])
+}
+
+// ============================================================
+// PHASE 2E: SUPPLIER & PURCHASE INVOICE (STOCK RECEIVING)
+// ============================================================
+
+enum PurchaseInvoiceStatus {
+  RECEIVED
+}
+
+enum StockMovementType {
+  RECEIPT
+  ISSUE
+}
+
+/// Supplier represents an external vendor.
+/// BUSINESS RULE: Suppliers do NOT log in and have NO User accounts.
+model Supplier {
+  id               String            @id @default(uuid())
+  name             String
+  phone            String?
+  address          String?
+  active           Boolean           @default(true)
+  purchaseInvoices PurchaseInvoice[]
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+  @@index([active])
+  @@index([phone])
+}
+
+/// PurchaseInvoice represents a stock-receiving document from a Supplier.
+/// BUSINESS RULE: Purchase Invoice is the ONLY normal stock receiving flow. There is NO Purchase Order.
+model PurchaseInvoice {
+  id                 String                @id @default(uuid())
+  supplierId         String                @map("supplier_id")
+  supplier           Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  invoiceNumber      String                @map("invoice_number")
+  invoiceDate        DateTime              @map("invoice_date")
+  grossTotal         Decimal               @map("gross_total") @db.Decimal(14, 2)
+  totalItemDiscount  Decimal               @map("total_item_discount") @db.Decimal(14, 2)
+  netTotal           Decimal               @map("net_total") @db.Decimal(14, 2)
+  status             PurchaseInvoiceStatus @default(RECEIVED)
+  createdBy          String?               @map("created_by")
+  items              PurchaseInvoiceItem[]
+  stockMovements     StockMovement[]
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+
+  @@unique([supplierId, invoiceNumber])
+  @@map("purchase_invoices")
+  @@index([supplierId])
+  @@index([invoiceDate])
+  @@index([status])
+}
+
+/// PurchaseInvoiceItem represents an item on a purchase invoice.
+model PurchaseInvoiceItem {
+  id                String          @id @default(uuid())
+  purchaseInvoiceId String          @map("purchase_invoice_id")
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  productId         String          @map("product_id")
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity          Decimal         @db.Decimal(12, 2)
+  uom               Uom
+  actualRate        Decimal         @map("actual_rate") @db.Decimal(12, 2)
+  discount          Decimal         @default(0) @db.Decimal(12, 2)
+  grossTotal        Decimal         @map("gross_total") @db.Decimal(14, 2)
+  netTotal          Decimal         @map("net_total") @db.Decimal(14, 2)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@map("purchase_invoice_items")
+  @@index([purchaseInvoiceId])
+  @@index([productId])
+}
+
+/// StockMovement records inventory ledger entries.
+/// In Phase 2E, only RECEIPT movements are created by Purchase Invoices.
+model StockMovement {
+  id                String            @id @default(uuid())
+  productId         String            @map("product_id")
+  product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  movementType      StockMovementType @map("movement_type")
+  quantity          Decimal           @db.Decimal(12, 2)
+  uom               Uom
+  baseQuantity      Decimal           @map("base_quantity") @db.Decimal(12, 2)
+  purchaseInvoiceId String?           @map("purchase_invoice_id")
+  purchaseInvoice   PurchaseInvoice?  @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+  issueStockId      String?           @map("issue_stock_id")
+  issueStock        IssueStock?       @relation(fields: [issueStockId], references: [id], onDelete: Restrict)
+  createdBy         String?           @map("created_by")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  @@map("stock_movements")
+  @@index([productId])
+  @@index([movementType])
+  @@index([purchaseInvoiceId])
+  @@index([issueStockId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// PHASE 2F: SALES TARGETS & PRODUCT TARGET QUANTITIES
+// ============================================================
+
+/// SalesTarget represents daily revenue and product targets for a Salesman.
+/// BUSINESS RULES:
+/// 1. Only SALESMAN can have Sales Targets. Dealers and Staff CANNOT have targets.
+/// 2. Target is NOT stock, NOT issue quantity, NOT actual sales.
+/// 3. One target per salesman per business date.
+model SalesTarget {
+  id                 String               @id @default(uuid())
+  salesmanId         String               @map("salesman_id")
+  salesman           Person               @relation(fields: [salesmanId], references: [id], onDelete: Restrict)
+  targetDate         DateTime             @map("target_date") @db.Date
+  dailyRevenueTarget Decimal              @map("daily_revenue_target") @db.Decimal(14, 2)
+  active             Boolean              @default(true)
+  createdBy          String?              @map("created_by")
+  productTargets     SalesTargetProduct[]
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  @@unique([salesmanId, targetDate])
+  @@map("sales_targets")
+  @@index([salesmanId])
+  @@index([targetDate])
+  @@index([active])
+}
+
+/// SalesTargetProduct represents product-specific quantity targets within a SalesTarget.
+/// Product rate is NOT stored here; authoritative rates live in Product Master.
+model SalesTargetProduct {
+  id             String      @id @default(uuid())
+  salesTargetId  String      @map("sales_target_id")
+  salesTarget    SalesTarget @relation(fields: [salesTargetId], references: [id], onDelete: Cascade)
+  productId      String      @map("product_id")
+  product        Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  targetQuantity Decimal     @map("target_quantity") @db.Decimal(12, 2)
+  uom            Uom
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  @@unique([salesTargetId, productId])
+  @@map("sales_target_products")
+  @@index([salesTargetId])
+  @@index([productId])
+}
+
+// ============================================================
+// PHASE 2G: ISSUE STOCK (STOCK OUT TO SALESMAN / DEALER)
+// ============================================================
+
+enum IssueRecipientType {
+  SALESMAN
+  DEALER
+}
+
+/// IssueStock represents a physical stock issue from Admin to a Salesman or Dealer.
+/// BUSINESS RULES:
+/// 1. Exactly one recipient (SALESMAN or DEALER).
+/// 2. Issue quantity is physical stock, independent from Sales Target.
+/// 3. Cannot issue more stock than available inventory.
+/// 4. Generates ISSUE stock movements reducing available stock.
+model IssueStock {
+  id               String             @id @default(uuid())
+  recipientType    IssueRecipientType @map("recipient_type")
+  salesmanId       String?            @map("salesman_id")
+  salesman         Person?            @relation("SalesmanIssues", fields: [salesmanId], references: [id], onDelete: Restrict)
+  dealerId         String?            @map("dealer_id")
+  dealer           Person?            @relation("DealerIssues", fields: [dealerId], references: [id], onDelete: Restrict)
+  issueDate        DateTime           @map("issue_date") @db.Date
+  totalIssuedValue Decimal            @map("total_issued_value") @db.Decimal(14, 2)
+  createdBy        String?            @map("created_by")
+  items            IssueStockItem[]
+  stockMovements   StockMovement[]
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@map("issue_stocks")
+  @@index([recipientType])
+  @@index([salesmanId])
+  @@index([dealerId])
+  @@index([issueDate])
+}
+
+/// IssueStockItem represents an individual product line in an IssueStock document.
+model IssueStockItem {
+  id           String     @id @default(uuid())
+  issueStockId String     @map("issue_stock_id")
+  issueStock   IssueStock @relation(fields: [issueStockId], references: [id], onDelete: Cascade)
+  productId    String     @map("product_id")
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity     Decimal    @db.Decimal(12, 2)
+  uom          Uom
+  salesRate    Decimal    @map("sales_rate") @db.Decimal(12, 2)
+  issuedValue  Decimal    @map("issued_value") @db.Decimal(14, 2)
+  baseQuantity Decimal    @map("base_quantity") @db.Decimal(12, 2)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@unique([issueStockId, productId])
+  @@map("issue_stock_items")
+  @@index([issueStockId])
+  @@index([productId])
+}
+
+// ============================================================
+// PHASE 2H: DAILY HANDOVER (ACTUAL SALES & RECONCILIATION)
+// ============================================================
+
+enum HandoverRecipientType {
+  SALESMAN
+  DEALER
+}
+
+enum HandoverStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  SETTLED
+  SHORT
+  EXCESS
+}
+
+/// DailyHandover represents the authoritative daily sales and handover sheet.
+/// It records actual sales, gross sales, item discounts, empty packet benefits,
+/// coupon benefits, expected handover, cash/gpay collection, and outstanding/excess.
+model DailyHandover {
+  id                 String                @id @default(uuid())
+  recipientType      HandoverRecipientType @map("recipient_type")
+  salesmanId         String?               @map("salesman_id")
+  salesman           Person?               @relation("SalesmanHandovers", fields: [salesmanId], references: [id], onDelete: Restrict)
+  dealerId           String?               @map("dealer_id")
+  dealer             Person?               @relation("DealerHandovers", fields: [dealerId], references: [id], onDelete: Restrict)
+  handoverDate       DateTime              @map("handover_date") @db.Date
+  status             HandoverStatus        @default(DRAFT)
+
+  // Customer details for Dealer transactions
+  customerName       String?               @map("customer_name")
+  customerPhone      String?               @map("customer_phone")
+
+  // Sales Totals
+  grossSales         Decimal               @default(0) @map("gross_sales") @db.Decimal(14, 2)
+  totalItemDiscount  Decimal               @default(0) @map("total_item_discount") @db.Decimal(14, 2)
+  netSales           Decimal               @default(0) @map("net_sales") @db.Decimal(14, 2)
+  freeItemValue      Decimal               @default(0) @map("free_item_value") @db.Decimal(14, 2)
+
+  // Deductions / Rebates (Handover-level)
+  emptyPacketBenefit Decimal               @default(0) @map("empty_packet_benefit") @db.Decimal(14, 2)
+  couponBenefit      Decimal               @default(0) @map("coupon_benefit") @db.Decimal(14, 2)
+
+  // Final Reconciliation
+  expectedHandover   Decimal               @default(0) @map("expected_handover") @db.Decimal(14, 2)
+  cashCollected      Decimal               @default(0) @map("cash_collected") @db.Decimal(14, 2)
+  gpayCollected      Decimal               @default(0) @map("gpay_collected") @db.Decimal(14, 2)
+  collectionTotal    Decimal               @default(0) @map("collection_total") @db.Decimal(14, 2)
+  outstanding        Decimal               @default(0) @db.Decimal(14, 2)
+  excess             Decimal               @default(0) @db.Decimal(14, 2)
+
+  // Audit
+  submittedBy        String?               @map("submitted_by")
+  reviewedBy         String?               @map("reviewed_by")
+  submittedAt        DateTime?             @map("submitted_at")
+  reviewedAt         DateTime?             @map("reviewed_at")
+  notes              String?
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+
+  items              DailyHandoverItem[]
+  emptyPackets       DailyHandoverEmptyPacket[]
+  coupons            DailyHandoverCoupon[]
+  ledgerTransactions SalesmanLedgerTransaction[]
+
+  @@unique([salesmanId, handoverDate])
+  @@map("daily_handovers")
+  @@index([recipientType])
+  @@index([salesmanId])
+  @@index([dealerId])
+  @@index([handoverDate])
+  @@index([status])
+}
+
+/// DailyHandoverItem represents an individual product line in a Daily Handover.
+/// Sales = Opening - Closing
+/// Chargeable = Sales - Free
+/// Gross = Chargeable * Rate
+/// Free Item Value = Free * Rate (informational)
+/// Net = Gross - Discount
+model DailyHandoverItem {
+  id                 String        @id @default(uuid())
+  handoverId         String        @map("handover_id")
+  handover           DailyHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  productId          String        @map("product_id")
+  product            Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  uom                Uom
+  openingQuantity    Decimal       @map("opening_quantity") @db.Decimal(12, 2)
+  closingQuantity    Decimal       @map("closing_quantity") @db.Decimal(12, 2)
+  salesQuantity      Decimal       @map("sales_quantity") @db.Decimal(12, 2)
+  freeQuantity       Decimal       @default(0) @map("free_quantity") @db.Decimal(12, 2)
+  chargeableQuantity Decimal       @map("chargeable_quantity") @db.Decimal(12, 2)
+  rate               Decimal       @db.Decimal(12, 2)
+  grossAmount        Decimal       @map("gross_amount") @db.Decimal(14, 2)
+  freeItemValue      Decimal       @default(0) @map("free_item_value") @db.Decimal(14, 2)
+  discount           Decimal       @default(0) @db.Decimal(14, 2)
+  netAmount          Decimal       @map("net_amount") @db.Decimal(14, 2)
+  baseSalesQuantity  Decimal?      @map("base_sales_quantity") @db.Decimal(12, 2)
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  @@unique([handoverId, productId])
+  @@map("daily_handover_items")
+  @@index([handoverId])
+  @@index([productId])
+}
+
+/// DailyHandoverEmptyPacket records empty packet returns for a handover.
+/// Benefit amount is entered directly, NOT read from Product Master.
+model DailyHandoverEmptyPacket {
+  id           String        @id @default(uuid())
+  handoverId   String        @map("handover_id")
+  handover     DailyHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  productId    String?       @map("product_id")
+  product      Product?      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity     Decimal       @db.Decimal(12, 2)
+  actualAmount Decimal       @map("actual_amount") @db.Decimal(14, 2)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("daily_handover_empty_packets")
+  @@index([handoverId])
+  @@index([productId])
+}
+
+/// DailyHandoverCoupon records coupon denomination returns for a handover.
+/// Denomination * Quantity = Amount.
+model DailyHandoverCoupon {
+  id           String        @id @default(uuid())
+  handoverId   String        @map("handover_id")
+  handover     DailyHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  productId    String?       @map("product_id")
+  product      Product?      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  denomination Decimal       @db.Decimal(12, 2)
+  quantity     Decimal       @db.Decimal(12, 2)
+  amount       Decimal       @db.Decimal(14, 2)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("daily_handover_coupons")
+  @@index([handoverId])
+  @@index([productId])
+}
+
+// ============================================================
+// PHASE 2I: SALESMAN LEDGER
+// ============================================================
+
+enum LedgerTransactionType {
+  HANDOVER_SHORT
+  ADVANCE
+  RECOVERY
+  SALARY_DEDUCTION
+  MANUAL_ADJUSTMENT
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerReferenceType {
+  DAILY_HANDOVER
+  MANUAL
+  SALARY
+}
+
+/// SalesmanLedgerTransaction represents an immutable transaction in the salesman's financial ledger.
+/// DEBIT = increases amount owed by salesman (shortages, advances, manual debit).
+/// CREDIT = decreases amount owed by salesman (recoveries, salary deductions, manual credit).
+model SalesmanLedgerTransaction {
+  id              String                @id @default(uuid())
+  salesmanId      String                @map("salesman_id")
+  salesman        Person                @relation("SalesmanLedger", fields: [salesmanId], references: [id], onDelete: Restrict)
+  transactionDate DateTime              @map("transaction_date") @db.Date
+  type            LedgerTransactionType
+  direction       LedgerDirection
+  amount          Decimal               @db.Decimal(14, 2)
+  referenceType   LedgerReferenceType?  @map("reference_type")
+  referenceId     String?               @map("reference_id")
+  dailyHandoverId String?               @map("daily_handover_id")
+  dailyHandover   DailyHandover?        @relation(fields: [dailyHandoverId], references: [id], onDelete: Restrict)
+  notes           String?
+  createdBy       String                @map("created_by")
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  @@unique([dailyHandoverId, type])
+  @@map("salesman_ledger_transactions")
+  @@index([salesmanId])
+  @@index([transactionDate])
+  @@index([type])
+  @@index([direction])
+  @@index([referenceType])
+  @@index([referenceId])
+}
+
+// ============================================================
+// PHASE 2J: EXPENSES
+// ============================================================
+
+enum ExpenseCategory {
+  OFFICE
+  HOUSE
+  GPI
+}
+
+/// Expense represents an immutable operational expense manually recorded by an Admin.
+/// Derived expenses (EMPTY_PACKET, COUPON, DISCOUNT) are calculated dynamically from Daily Handover data.
+model Expense {
+  id          String          @id @default(uuid())
+  expenseDate DateTime        @map("expense_date") @db.Date
+  category    ExpenseCategory
+  amount      Decimal         @db.Decimal(14, 2)
+  notes       String
+  createdBy   String          @map("created_by")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@map("expenses")
+  @@index([expenseDate])
+  @@index([category])
+  @@index([createdAt])
+}
+
+// ============================================================
+// PHASE 2K: ATTENDANCE & SALARY
+// ============================================================
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+/// SalesmanAttendance records daily attendance for a salesman.
+/// Supports ONLY PRESENT and ABSENT.
+model SalesmanAttendance {
+  id             String           @id @default(uuid())
+  salesmanId     String           @map("salesman_id")
+  salesman       Person           @relation("SalesmanAttendance", fields: [salesmanId], references: [id], onDelete: Restrict)
+  attendanceDate DateTime         @map("attendance_date") @db.Date
+  status         AttendanceStatus
+  notes          String?
+  createdBy      String           @map("created_by")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  @@unique([salesmanId, attendanceDate])
+  @@map("salesman_attendances")
+  @@index([salesmanId])
+  @@index([attendanceDate])
+  @@index([status])
+}
+
+enum SalaryStatus {
+  PAID
+}
+
+/// SalesmanSalary records monthly salary paid to a salesman.
+/// Net Salary = Base Salary - Ledger Salary Recovery.
+/// Completely decoupled from attendance.
+model SalesmanSalary {
+  id             String       @id @default(uuid())
+  salesmanId     String       @map("salesman_id")
+  salesman       Person       @relation("SalesmanSalary", fields: [salesmanId], references: [id], onDelete: Restrict)
+  salaryMonth    DateTime     @map("salary_month") @db.Date
+  baseSalary     Decimal      @map("base_salary") @db.Decimal(14, 2)
+  salaryRecovery Decimal      @map("salary_recovery") @db.Decimal(14, 2)
+  netSalary      Decimal      @map("net_salary") @db.Decimal(14, 2)
+  status         SalaryStatus @default(PAID)
+  paidDate       DateTime     @map("paid_date") @db.Date
+  createdBy      String       @map("created_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([salesmanId, salaryMonth])
+  @@map("salesman_salaries")
+  @@index([salesmanId])
+  @@index([salaryMonth])
+  @@index([status])
+}
+
+
+
+
+
+
+

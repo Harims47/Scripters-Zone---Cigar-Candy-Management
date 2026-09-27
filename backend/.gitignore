@@ -1,0 +1,21 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies & Build
+node_modules/
+dist/
+
+# Backups
+backups/
+*.dump
+*.backup
+*.sql.gz
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
