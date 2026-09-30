@@ -31,8 +31,8 @@ export function calculateRow(
   const safeRate = Math.max(0, Number(rate) || 0);
   const safeDiscount = Math.max(0, Number(discount) || 0);
 
-  const sales = Math.max(0, safeOpening - safeClosing);
-  const chargeable = Math.max(0, sales - safeFree);
+  const sales = Math.round(Math.max(0, safeOpening - safeClosing) * 100) / 100;
+  const chargeable = Math.round(Math.max(0, sales - safeFree) * 100) / 100;
   const grossAmount = Math.round((chargeable * safeRate) * 100) / 100;
   const freeItemValue = Math.round((safeFree * safeRate) * 100) / 100;
   const netAmount = Math.round(Math.max(0, grossAmount - safeDiscount) * 100) / 100;
@@ -133,6 +133,9 @@ export function calculateHandover(input: HandoverCalculationInput): HandoverCalc
     }
   }
 
+  salesQuantity = Math.round(salesQuantity * 100) / 100;
+  freeQuantity = Math.round(freeQuantity * 100) / 100;
+  chargeableQuantity = Math.round(chargeableQuantity * 100) / 100;
   grossAmount = Math.round(grossAmount * 100) / 100;
   totalItemDiscounts = Math.round(totalItemDiscounts * 100) / 100;
 

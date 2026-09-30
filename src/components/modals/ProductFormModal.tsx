@@ -397,7 +397,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       </label>
                       <input
                         type="number"
-                        min="1"
+                        min="0.01"
+                        step="0.01"
+                        inputMode="decimal"
                         className="input-field"
                         value={caseConversionFactor}
                         onChange={(e) => setCaseConversionFactor(parseFloat(e.target.value) || 0)}

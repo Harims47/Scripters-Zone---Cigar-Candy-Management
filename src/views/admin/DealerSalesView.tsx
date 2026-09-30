@@ -517,7 +517,9 @@ export const DealerSalesView: React.FC = () => {
                           <input
                             type="number"
                             min="0"
-                            placeholder="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            placeholder="0.00"
                             value={row.qty}
                             onChange={(e) => handleRowChange(p.id, 'qty', e.target.value)}
                             style={{

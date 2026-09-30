@@ -185,13 +185,13 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
 
   const handleItemQtyChange = (index: number, qty: number) => {
     setItems((prev) =>
-      prev.map((it, i) => (i === index ? { ...it, quantity: Math.max(1, qty) } : it))
+      prev.map((it, i) => (i === index ? { ...it, quantity: Math.max(0.01, Math.round(qty * 100) / 100) } : it))
     );
   };
 
   const handleItemTargetQtyChange = (index: number, val: string) => {
     setItems((prev) =>
-      prev.map((it, i) => (i === index ? { ...it, targetQuantity: val === '' ? '' : Math.max(0, parseInt(val) || 0) } : it))
+      prev.map((it, i) => (i === index ? { ...it, targetQuantity: val === '' ? '' : Math.max(0, parseFloat(val) || 0) } : it))
     );
   };
 
@@ -602,12 +602,13 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
                     <div style={{ flex: isSalesman ? '1 1 80px' : '1 1 90px', display: 'flex', alignItems: 'center' }}>
                       <input
                         type="number"
-                        min="1"
-                        inputMode="numeric"
+                        min="0.01"
+                        step="0.01"
+                        inputMode="decimal"
                         className="input-field"
                         placeholder="Issue"
                         value={item.quantity}
-                        onChange={(e) => handleItemQtyChange(idx, parseInt(e.target.value) || 0)}
+                        onChange={(e) => handleItemQtyChange(idx, parseFloat(e.target.value) || 0)}
                         style={{ height: '42px', textAlign: 'center', fontWeight: 700 }}
                         title="Stock quantity to issue"
                       />
@@ -618,7 +619,8 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
                         <input
                           type="number"
                           min="0"
-                          inputMode="numeric"
+                          step="0.01"
+                          inputMode="decimal"
                           className="input-field"
                           placeholder="Target"
                           value={item.targetQuantity ?? ''}

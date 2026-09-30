@@ -63,7 +63,7 @@ export function toBaseQuantity(
   if (normalizedUOM === 'm') {
     // 1 M = 100 Packets
     return {
-      baseQuantity: numQty * 100,
+      baseQuantity: Math.round(numQty * 100 * 100) / 100,
       baseUOM
     };
   }
@@ -81,13 +81,13 @@ export function toBaseQuantity(
     if (product.caseConversionUnit === 'M') {
       // 1 Case = factor M = factor * 100 Packets
       return {
-        baseQuantity: numQty * factor * 100,
+        baseQuantity: Math.round(numQty * factor * 100 * 100) / 100,
         baseUOM
       };
     } else {
       // 1 Case = factor Packets
       return {
-        baseQuantity: numQty * factor,
+        baseQuantity: Math.round(numQty * factor * 100) / 100,
         baseUOM
       };
     }
@@ -95,7 +95,7 @@ export function toBaseQuantity(
 
   // Fallback if unknown UOM
   return {
-    baseQuantity: numQty,
+    baseQuantity: Math.round(numQty * 100) / 100,
     baseUOM
   };
 }
@@ -110,7 +110,7 @@ export function fromBaseQuantity(
 ): number {
   const safeBase = Number(baseQuantity) || 0;
   if (!product || !targetUOM || product.category === 'Candy' || targetUOM.toLowerCase() === 'jar') {
-    return safeBase;
+    return Math.round(safeBase * 100) / 100;
   }
 
   const normalizedTarget = targetUOM.toLowerCase();
@@ -121,11 +121,11 @@ export function fromBaseQuantity(
     normalizedTarget === 'pocket' ||
     normalizedTarget === 'pockets'
   ) {
-    return safeBase;
+    return Math.round(safeBase * 100) / 100;
   }
 
   if (normalizedTarget === 'm') {
-    return safeBase / 100;
+    return Math.round((safeBase / 100) * 100) / 100;
   }
 
   if (normalizedTarget === 'case' || normalizedTarget === 'cases') {
@@ -134,13 +134,13 @@ export function fromBaseQuantity(
 
     if (product.caseConversionUnit === 'M') {
       // 1 Case = factor * 100 Packets
-      return safeBase / (factor * 100);
+      return Math.round((safeBase / (factor * 100)) * 100) / 100;
     } else {
-      return safeBase / factor;
+      return Math.round((safeBase / factor) * 100) / 100;
     }
   }
 
-  return safeBase;
+  return Math.round(safeBase * 100) / 100;
 }
 
 /**

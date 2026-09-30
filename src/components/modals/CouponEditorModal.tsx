@@ -390,8 +390,9 @@ export const CouponEditorModal: React.FC<CouponEditorModalProps> = ({
                         </label>
                         <input
                           type="number"
-                          inputMode="numeric"
-                          min="1"
+                          inputMode="decimal"
+                          min="0.01"
+                          step="0.01"
                           placeholder="Qty"
                           className="input-field"
                           style={{

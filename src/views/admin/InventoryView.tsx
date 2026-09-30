@@ -809,12 +809,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                           <td style={{ padding: '6px 10px' }}>
                             <input
                               type="number"
-                              min="1"
+                              min="0.01"
+                              step="0.01"
+                              inputMode="decimal"
                               data-testid="invoice-item-qty"
                               className="input-field"
                               style={{ padding: '5px 8px', fontSize: '0.82rem', textAlign: 'center' }}
                               value={item.quantity}
-                              onChange={(e) => handleUpdateInvRow(index, 'quantity', parseInt(e.target.value) || 0)}
+                              onChange={(e) => handleUpdateInvRow(index, 'quantity', parseFloat(e.target.value) || 0)}
                             />
                           </td>
                           <td style={{ padding: '6px 10px', textAlign: 'right' }}>
@@ -910,10 +912,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                           <label className="form-label" style={{ fontSize: '0.72rem' }}>Quantity</label>
                           <input
                             type="number"
-                            min="1"
+                            min="0.01"
+                            step="0.01"
+                            inputMode="decimal"
                             className="input-field"
                             value={item.quantity}
-                            onChange={(e) => handleUpdateInvRow(index, 'quantity', parseInt(e.target.value) || 0)}
+                            onChange={(e) => handleUpdateInvRow(index, 'quantity', parseFloat(e.target.value) || 0)}
                           />
                         </div>
                         <div>
@@ -1235,8 +1239,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                             <input
                               type="number"
                               min="0"
+                              step="0.01"
+                              inputMode="decimal"
                               disabled={alreadySet}
-                              placeholder={alreadySet ? 'Set' : '0'}
+                              placeholder={alreadySet ? 'Set' : '0.00'}
                               className="input-field"
                               style={{ padding: '4px 6px', fontSize: '0.82rem', textAlign: 'center' }}
                               value={currentInput.qty}

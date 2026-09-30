@@ -147,7 +147,7 @@ export class DailyHandoversService {
         );
       }
 
-      const salesQuantity = item.openingQuantity - item.closingQuantity;
+      const salesQuantity = Math.round((item.openingQuantity - item.closingQuantity) * 100) / 100;
       const freeQuantity = item.freeQuantity || 0;
       if (freeQuantity < 0) {
         throw AppError.badRequest(`Free quantity cannot be negative for product "${product.name}"`);
@@ -158,10 +158,10 @@ export class DailyHandoversService {
         );
       }
 
-      const chargeableQuantity = salesQuantity - freeQuantity;
+      const chargeableQuantity = Math.round((salesQuantity - freeQuantity) * 100) / 100;
       const rate = product.salesRate.toNumber();
-      const grossAmount = chargeableQuantity * rate;
-      const itemFreeValue = freeQuantity * rate;
+      const grossAmount = Math.round(chargeableQuantity * rate * 100) / 100;
+      const itemFreeValue = Math.round(freeQuantity * rate * 100) / 100;
 
       const discount = item.discount || 0;
       if (discount < 0) {
@@ -173,7 +173,7 @@ export class DailyHandoversService {
         );
       }
 
-      const netAmount = grossAmount - discount;
+      const netAmount = Math.round((grossAmount - discount) * 100) / 100;
 
       // Base sales quantity calculation
       let baseSalesQuantity = salesQuantity;
@@ -208,7 +208,9 @@ export class DailyHandoversService {
       });
     }
 
-    const netSales = grossSales - totalItemDiscount;
+    grossSales = Math.round(grossSales * 100) / 100;
+    totalItemDiscount = Math.round(totalItemDiscount * 100) / 100;
+    const netSales = Math.round((grossSales - totalItemDiscount) * 100) / 100;
 
     // 4. Empty Packet validation & calculation
     const calculatedEmptyPackets: CalculatedEmptyPacket[] = [];
@@ -234,6 +236,7 @@ export class DailyHandoversService {
         actualAmount: ep.actualAmount,
       });
     }
+    emptyPacketBenefit = Math.round(emptyPacketBenefit * 100) / 100;
 
     // 5. Coupon validation & calculation
     const calculatedCoupons: CalculatedCoupon[] = [];
@@ -252,7 +255,7 @@ export class DailyHandoversService {
           throw AppError.badRequest(`Coupon product ID "${c.productId}" not found`);
         }
       }
-      const amount = c.denomination * c.quantity;
+      const amount = Math.round(c.denomination * c.quantity * 100) / 100;
       couponBenefit += amount;
       calculatedCoupons.push({
         productId: c.productId,
@@ -261,16 +264,17 @@ export class DailyHandoversService {
         amount,
       });
     }
+    couponBenefit = Math.round(couponBenefit * 100) / 100;
 
     // 6. Expected Handover Calculation
-    const totalBenefits = emptyPacketBenefit + couponBenefit;
+    const totalBenefits = Math.round((emptyPacketBenefit + couponBenefit) * 100) / 100;
     if (totalBenefits > netSales) {
       throw AppError.badRequest(
         `Benefits (Empty Packet ₹${emptyPacketBenefit} + Coupon ₹${couponBenefit} = ₹${totalBenefits}) exceed Net Sales (₹${netSales})`
       );
     }
 
-    const expectedHandover = netSales - totalBenefits;
+    const expectedHandover = Math.round((netSales - totalBenefits) * 100) / 100;
 
     // 7. Collection Calculation
     if (cashCollectedInput < 0) {
@@ -280,16 +284,16 @@ export class DailyHandoversService {
       throw AppError.badRequest('GPay collected cannot be negative');
     }
 
-    let cashCollected = cashCollectedInput;
-    let gpayCollected = gpayCollectedInput;
-    let collectionTotal = cashCollected + gpayCollected;
+    let cashCollected = Math.round(cashCollectedInput * 100) / 100;
+    let gpayCollected = Math.round(gpayCollectedInput * 100) / 100;
+    let collectionTotal = Math.round((cashCollected + gpayCollected) * 100) / 100;
     let outstanding = 0;
     let excess = 0;
     let status: HandoverStatus = desiredStatus || HandoverStatus.DRAFT;
 
     if (isCollectionProvided) {
       if (collectionTotal < expectedHandover) {
-        outstanding = expectedHandover - collectionTotal;
+        outstanding = Math.round((expectedHandover - collectionTotal) * 100) / 100;
         excess = 0;
         status = HandoverStatus.SHORT;
       } else if (collectionTotal === expectedHandover) {
@@ -298,7 +302,7 @@ export class DailyHandoversService {
         status = HandoverStatus.SETTLED;
       } else {
         outstanding = 0;
-        excess = collectionTotal - expectedHandover;
+        excess = Math.round((collectionTotal - expectedHandover) * 100) / 100;
         status = HandoverStatus.EXCESS;
       }
     } else {
