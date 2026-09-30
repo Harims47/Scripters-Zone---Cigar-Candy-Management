@@ -298,10 +298,12 @@ export const ProductsCatalogView: React.FC = () => {
                       ) : null}
                     </td>
                     <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 700, color: '#475569' }}>
-                      {p.standardPurchasePrice ? `₹${p.standardPurchasePrice.toLocaleString('en-IN')}` : '—'}
+                      {p.standardPurchasePrice !== undefined && p.standardPurchasePrice !== null
+                        ? `₹${Number(p.standardPurchasePrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '—'}
                     </td>
                     <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
-                      ₹{p.rate.toLocaleString('en-IN')}
+                      ₹{Number(p.rate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ padding: '12px 10px', textAlign: 'center' }}>
                       <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: p.active ? '#ecfdf5' : '#f1f5f9', color: p.active ? '#047857' : '#94a3b8' }}>

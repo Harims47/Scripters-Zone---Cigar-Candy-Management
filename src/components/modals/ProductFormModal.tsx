@@ -26,8 +26,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [uom, setUom] = useState<ProductUOM>('Packet');
   const [purchaseUOM, setPurchaseUOM] = useState<ProductUOM>('M');
   const [salesUOM, setSalesUOM] = useState<ProductUOM>('Packet');
-  const [standardPurchasePrice, setStandardPurchasePrice] = useState<number>(85);
-  const [rate, setRate] = useState<number>(100);
+  const [standardPurchasePrice, setStandardPurchasePrice] = useState<number | string>(85);
+  const [rate, setRate] = useState<number | string>(100);
   const [caseConversionFactor, setCaseConversionFactor] = useState<number>(50);
   const [caseConversionUnit, setCaseConversionUnit] = useState<'M' | 'Packet'>('M');
   const [active, setActive] = useState<boolean>(true);
@@ -46,8 +46,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         setUom(productToEdit.uom === 'Pocket' ? 'Packet' : productToEdit.uom);
         setPurchaseUOM(productToEdit.purchaseUOM || (productToEdit.category === 'Candy' ? 'Jar' : 'M'));
         setSalesUOM(productToEdit.salesUOM || (productToEdit.category === 'Candy' ? 'Jar' : 'Packet'));
-        setStandardPurchasePrice(productToEdit.standardPurchasePrice || 85);
-        setRate(productToEdit.rate);
+        setStandardPurchasePrice(productToEdit.standardPurchasePrice !== undefined && productToEdit.standardPurchasePrice !== null ? productToEdit.standardPurchasePrice : 85);
+        setRate(productToEdit.rate !== undefined && productToEdit.rate !== null ? productToEdit.rate : 100);
         setCaseConversionFactor(productToEdit.caseConversionFactor || 50);
         setCaseConversionUnit(productToEdit.caseConversionUnit === 'Pocket' ? 'Packet' : (productToEdit.caseConversionUnit || 'M'));
         setActive(productToEdit.active);
@@ -119,15 +119,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       return;
     }
 
-    if (rate <= 0) {
+    const parsedRate = parseFloat(String(rate));
+    const parsedPurchasePrice = parseFloat(String(standardPurchasePrice));
+
+    if (isNaN(parsedRate) || parsedRate <= 0) {
       setErrorMsg('Selling rate must be greater than zero.');
       return;
     }
 
-    if (standardPurchasePrice < 0) {
+    if (isNaN(parsedPurchasePrice) || parsedPurchasePrice < 0) {
       setErrorMsg('Standard purchase price cannot be negative.');
       return;
     }
+
+    const finalRate = Math.round(parsedRate * 100) / 100;
+    const finalPurchasePrice = Math.round(parsedPurchasePrice * 100) / 100;
 
     // Critical Section 14 & 15: Validate Case Conversion Factor
     const isCase = category === 'Cigarette' && (uom === 'Case' || purchaseUOM === 'Case' || salesUOM === 'Case');
@@ -161,8 +167,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           purchaseUOM: effectivePurchaseUOM,
           salesUOM: effectiveSalesUOM,
           baseUOM,
-          standardPurchasePrice,
-          rate,
+          standardPurchasePrice: finalPurchasePrice,
+          rate: finalRate,
           caseConversionFactor: isCase ? caseConversionFactor : undefined,
           caseConversionUnit: isCase ? caseConversionUnit : undefined,
           emptyPocketValue: 0,
@@ -185,8 +191,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           purchaseUOM: effectivePurchaseUOM,
           salesUOM: effectiveSalesUOM,
           baseUOM,
-          standardPurchasePrice,
-          rate,
+          standardPurchasePrice: finalPurchasePrice,
+          rate: finalRate,
           caseConversionFactor: isCase ? caseConversionFactor : undefined,
           caseConversionUnit: isCase ? caseConversionUnit : undefined,
           emptyPocketValue: 0,
@@ -427,13 +433,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               <label className="form-label">Standard Purchase Price (₹) *</label>
               <input
                 type="number"
+                inputMode="decimal"
                 min="0"
-                step="0.5"
+                step="0.01"
                 className="input-field"
                 value={standardPurchasePrice}
-                onChange={(e) => setStandardPurchasePrice(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setStandardPurchasePrice(e.target.value)}
                 style={{ fontWeight: 700, color: '#0f172a' }}
-                placeholder="Reference purchase cost"
+                placeholder="0.00"
                 required
               />
             </div>
@@ -442,12 +449,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               <label className="form-label">Selling Rate (₹) *</label>
               <input
                 type="number"
-                min="1"
-                step="0.5"
+                inputMode="decimal"
+                min="0.01"
+                step="0.01"
                 className="input-field"
                 value={rate}
-                onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setRate(e.target.value)}
                 style={{ fontWeight: 800, color: '#059669' }}
+                placeholder="0.00"
                 required
               />
             </div>

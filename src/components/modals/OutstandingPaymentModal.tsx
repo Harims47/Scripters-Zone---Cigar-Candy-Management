@@ -147,11 +147,13 @@ export const OutstandingPaymentModal: React.FC<OutstandingPaymentModalProps> = (
             </div>
             <input
               type="number"
-              min="1"
+              min="0.01"
+              step="0.01"
+              inputMode="decimal"
               max={outstanding.remainingAmount}
               className="input-field"
               style={{ fontSize: '1.1rem', fontWeight: 800 }}
-              placeholder="e.g. 500"
+              placeholder="e.g. 500.00"
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
               required

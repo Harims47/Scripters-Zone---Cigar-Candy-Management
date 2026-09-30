@@ -342,10 +342,10 @@ export const CouponEditorModal: React.FC<CouponEditorModalProps> = ({
                           </span>
                           <input
                             type="number"
-                            inputMode="numeric"
-                            min="1"
-                            step="any"
-                            placeholder="e.g. 5"
+                            inputMode="decimal"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="e.g. 5.00"
                             className="input-field"
                             style={{
                               width: '100%',

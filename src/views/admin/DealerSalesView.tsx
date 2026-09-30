@@ -537,6 +537,8 @@ export const DealerSalesView: React.FC = () => {
                           <input
                             type="number"
                             min="0"
+                            step="0.01"
+                            inputMode="decimal"
                             value={row.rate}
                             onChange={(e) => handleRowChange(p.id, 'rate', e.target.value)}
                             style={{
@@ -557,7 +559,9 @@ export const DealerSalesView: React.FC = () => {
                           <input
                             type="number"
                             min="0"
-                            placeholder="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            placeholder="0.00"
                             value={row.discount}
                             onChange={(e) => handleRowChange(p.id, 'discount', e.target.value)}
                             style={{
@@ -638,6 +642,8 @@ export const DealerSalesView: React.FC = () => {
                   <input
                     type="number"
                     min="0"
+                    step="0.01"
+                    inputMode="decimal"
                     placeholder={String(totals.expectedHandover)}
                     value={amountReceived}
                     onChange={(e) => setAmountReceived(e.target.value)}

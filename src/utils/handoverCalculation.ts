@@ -33,9 +33,9 @@ export function calculateRow(
 
   const sales = Math.max(0, safeOpening - safeClosing);
   const chargeable = Math.max(0, sales - safeFree);
-  const grossAmount = chargeable * safeRate;
-  const freeItemValue = safeFree * safeRate;
-  const netAmount = Math.max(0, grossAmount - safeDiscount);
+  const grossAmount = Math.round((chargeable * safeRate) * 100) / 100;
+  const freeItemValue = Math.round((safeFree * safeRate) * 100) / 100;
+  const netAmount = Math.round(Math.max(0, grossAmount - safeDiscount) * 100) / 100;
 
   return {
     sales,
@@ -133,8 +133,11 @@ export function calculateHandover(input: HandoverCalculationInput): HandoverCalc
     }
   }
 
+  grossAmount = Math.round(grossAmount * 100) / 100;
+  totalItemDiscounts = Math.round(totalItemDiscounts * 100) / 100;
+
   // Net sales is Gross Sales minus sum of all item-level discounts
-  const netSales = Math.max(0, grossAmount - totalItemDiscounts);
+  const netSales = Math.round(Math.max(0, grossAmount - totalItemDiscounts) * 100) / 100;
 
   // Calculate Empty Packet Benefit
   let emptyPacketBenefit = 0;
@@ -147,6 +150,7 @@ export function calculateHandover(input: HandoverCalculationInput): HandoverCalc
     const rate = Math.max(0, Number(input.emptyPocketRate) || 0);
     emptyPacketBenefit = qty * rate;
   }
+  emptyPacketBenefit = Math.round(emptyPacketBenefit * 100) / 100;
 
   // Calculate Coupon Benefit (Item 7: Denomination x Quantity support)
   let couponBenefit = 0;
@@ -166,21 +170,22 @@ export function calculateHandover(input: HandoverCalculationInput): HandoverCalc
     const rate = Math.max(0, Number(input.couponRate) || 0);
     couponBenefit = qty * rate;
   }
+  couponBenefit = Math.round(couponBenefit * 100) / 100;
 
   // Authoritative Expected Handover:
   // Net Sales - Empty Packet Benefit - Coupon Benefit
-  const expectedHandover = Math.max(0, netSales - emptyPacketBenefit - couponBenefit);
-  const safeReceived = Math.max(0, Number(amountReceived) || 0);
+  const expectedHandover = Math.round(Math.max(0, netSales - emptyPacketBenefit - couponBenefit) * 100) / 100;
+  const safeReceived = Math.round(Math.max(0, Number(amountReceived) || 0) * 100) / 100;
 
   let outstanding = 0;
   let excess = 0;
   let status: HandoverStatus = 'SETTLED';
 
   if (safeReceived < expectedHandover) {
-    outstanding = expectedHandover - safeReceived;
+    outstanding = Math.round((expectedHandover - safeReceived) * 100) / 100;
     status = 'OUTSTANDING';
   } else if (safeReceived > expectedHandover) {
-    excess = safeReceived - expectedHandover;
+    excess = Math.round((safeReceived - expectedHandover) * 100) / 100;
     status = 'EXCESS';
   } else {
     status = 'SETTLED';

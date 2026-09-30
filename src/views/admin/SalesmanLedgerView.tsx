@@ -581,7 +581,10 @@ export const SalesmanLedgerView: React.FC = () => {
                     <label className="form-label">Advance Amount (₹) *</label>
                     <input
                       type="number"
-                      min="1"
+                      min="0.01"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="0.00"
                       className="input-field"
                       value={advAmount}
                       onChange={(e) => setAdvAmount(e.target.value)}
@@ -732,7 +735,10 @@ export const SalesmanLedgerView: React.FC = () => {
                     <label className="form-label">Recovery Amount (₹) *</label>
                     <input
                       type="number"
-                      min="1"
+                      min="0.01"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="0.00"
                       className="input-field"
                       value={recAmount}
                       onChange={(e) => setRecAmount(e.target.value)}

@@ -821,6 +821,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                             <input
                               type="number"
                               min="0"
+                              step="0.01"
                               data-testid="invoice-item-rate"
                               className="input-field"
                               style={{ padding: '5px 8px', fontSize: '0.82rem', textAlign: 'right' }}
@@ -832,15 +833,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                             <input
                               type="number"
                               min="0"
+                              step="0.01"
                               className="input-field"
                               style={{ padding: '5px 8px', fontSize: '0.82rem', textAlign: 'right', borderColor: Number(item.discount) > 0 ? '#f59e0b' : undefined }}
                               value={item.discount}
                               onChange={(e) => handleUpdateInvRow(index, 'discount', parseFloat(e.target.value) || 0)}
-                              placeholder="0"
+                              placeholder="0.00"
                             />
                           </td>
                           <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
-                            ₹{itemNet.toLocaleString('en-IN')}
+                            ₹{itemNet.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td style={{ padding: '6px 8px', textAlign: 'center' }}>
                             {invItems.length > 1 && (
@@ -919,6 +921,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                           <input
                             type="number"
                             min="0"
+                            step="0.01"
                             className="input-field"
                             value={item.rate}
                             onChange={(e) => handleUpdateInvRow(index, 'rate', parseFloat(e.target.value) || 0)}
@@ -931,16 +934,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                           <input
                             type="number"
                             min="0"
+                            step="0.01"
                             className="input-field"
                             value={item.discount}
                             onChange={(e) => handleUpdateInvRow(index, 'discount', parseFloat(e.target.value) || 0)}
-                            placeholder="0"
+                            placeholder="0.00"
                           />
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Net Total</div>
                           <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                            ₹{itemNet.toLocaleString('en-IN')}
+                            ₹{itemNet.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                         </div>
                       </div>
@@ -1252,6 +1256,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ initialTab = 'STOC
                             <input
                               type="number"
                               min="0"
+                              step="0.01"
                               disabled={alreadySet}
                               className="input-field"
                               style={{ padding: '4px 6px', fontSize: '0.82rem', textAlign: 'right' }}

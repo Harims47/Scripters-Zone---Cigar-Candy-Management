@@ -943,9 +943,11 @@ export const HandoverHubView: React.FC = () => {
                     <input
                       type="number"
                       min="0"
+                      step="0.01"
+                      inputMode="decimal"
                       className="input-field"
                       style={{ width: '100%', fontWeight: 800, fontSize: '1.1rem', borderColor: '#a7f3d0' }}
-                      placeholder="0"
+                      placeholder="0.00"
                       value={reviewCash}
                       onChange={(e) => setReviewCash(e.target.value)}
                       autoFocus
@@ -958,9 +960,11 @@ export const HandoverHubView: React.FC = () => {
                     <input
                       type="number"
                       min="0"
+                      step="0.01"
+                      inputMode="decimal"
                       className="input-field"
                       style={{ width: '100%', fontWeight: 800, fontSize: '1.1rem', borderColor: '#a7f3d0' }}
-                      placeholder="0"
+                      placeholder="0.00"
                       value={reviewGPay}
                       onChange={(e) => setReviewGPay(e.target.value)}
                     />

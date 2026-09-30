@@ -468,7 +468,9 @@ export const SalaryManagementView: React.FC = () => {
                   <label className="form-label">Base Salary (₹) *</label>
                   <input
                     type="number"
-                    min="1"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
                     className="input-field"
                     value={baseSalary}
                     onChange={(e) => {
@@ -500,6 +502,8 @@ export const SalaryManagementView: React.FC = () => {
                   <input
                     type="number"
                     min="0"
+                    step="0.01"
+                    inputMode="decimal"
                     className="input-field"
                     value={lopDeduction}
                     onChange={(e) => {
@@ -535,6 +539,8 @@ export const SalaryManagementView: React.FC = () => {
                   <input
                     type="number"
                     min="0"
+                    step="0.01"
+                    inputMode="decimal"
                     max={currentRecoverableBalance}
                     className="input-field"
                     value={ledgerRecovery}

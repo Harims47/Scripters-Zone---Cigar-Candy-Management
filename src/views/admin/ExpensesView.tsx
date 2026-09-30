@@ -391,9 +391,11 @@ export const ExpensesView: React.FC = () => {
               </label>
               <input
                 type="number"
-                min="1"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
                 className="input-field"
-                placeholder="₹0"
+                placeholder="₹0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 style={{ fontWeight: 800, fontSize: '1rem' }}

@@ -670,13 +670,14 @@ export const SalesTargetsView: React.FC = () => {
                   <label className="form-label" style={{ fontWeight: 800 }}>Daily Revenue Target (₹) *</label>
                   <input
                     type="number"
-                    min="100"
-                    step="100"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
                     className="input-field"
                     value={targetValue}
                     onChange={(e) => setTargetValue(e.target.value)}
                     required
-                    placeholder="e.g. 4000"
+                    placeholder="e.g. 4000.00"
                     style={{ fontWeight: 700, fontSize: '0.95rem' }}
                   />
                   <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', display: 'block' }}>

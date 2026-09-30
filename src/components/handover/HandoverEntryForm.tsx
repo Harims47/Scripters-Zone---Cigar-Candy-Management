@@ -806,9 +806,11 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
                         <input
                           type="number"
                           min="0"
+                          step="0.01"
+                          inputMode="decimal"
                           className="input-field"
                           style={{
-                            width: '64px',
+                            width: '74px',
                             padding: '4px',
                             textAlign: 'center',
                             fontWeight: 700,
@@ -816,8 +818,8 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
                             color: item.discount > 0 ? '#ea580c' : undefined
                           }}
                           value={item.discount || ''}
-                          onChange={(e) => handleRowChange(item.productId, 'discount', parseInt(e.target.value) || 0)}
-                          placeholder="₹0"
+                          onChange={(e) => handleRowChange(item.productId, 'discount', parseFloat(e.target.value) || 0)}
+                          placeholder="₹0.00"
                         />
                       </td>
 
@@ -973,8 +975,9 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
                     <span style={{ position: 'absolute', left: '8px', top: '10px', fontSize: '0.85rem', color: '#9a3412', fontWeight: 800 }}>₹</span>
                     <input
                       type="number"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       min="0"
+                      step="0.01"
                       style={{
                         width: '100%',
                         padding: '6px 8px 6px 22px',
@@ -987,8 +990,8 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
                         minHeight: '40px'
                       }}
                       value={item.discount || ''}
-                      placeholder="0"
-                      onChange={(e) => handleRowChange(item.productId, 'discount', parseInt(e.target.value) || 0)}
+                      placeholder="0.00"
+                      onChange={(e) => handleRowChange(item.productId, 'discount', parseFloat(e.target.value) || 0)}
                     />
                   </div>
                 </div>
@@ -1379,9 +1382,11 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
                   <input
                     type="number"
                     min="0"
+                    step="0.01"
+                    inputMode="decimal"
                     className="input-field"
                     style={{ width: '100%', paddingLeft: '24px', fontWeight: 800, fontSize: '1rem' }}
-                    placeholder="0"
+                    placeholder="0.00"
                     value={cashReceived}
                     onChange={(e) => setCashReceived(e.target.value)}
                   />
@@ -1396,9 +1401,11 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
                   <input
                     type="number"
                     min="0"
+                    step="0.01"
+                    inputMode="decimal"
                     className="input-field"
                     style={{ width: '100%', paddingLeft: '24px', fontWeight: 800, fontSize: '1rem' }}
-                    placeholder="0"
+                    placeholder="0.00"
                     value={gpayReceived}
                     onChange={(e) => setGpayReceived(e.target.value)}
                   />
