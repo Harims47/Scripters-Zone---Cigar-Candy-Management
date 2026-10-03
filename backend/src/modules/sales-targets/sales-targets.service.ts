@@ -512,4 +512,17 @@ export class SalesTargetsService {
 
     return this.getSalesTargetById(id);
   }
+
+  /**
+   * Deletes a Sales Target and cascading product targets (ADMIN only)
+   */
+  public static async deleteSalesTarget(id: string): Promise<void> {
+    const existing = await prisma.salesTarget.findUnique({ where: { id } });
+    if (!existing) {
+      throw AppError.notFound(`Sales target with ID "${id}" not found.`);
+    }
+
+    await prisma.salesTarget.delete({ where: { id } });
+  }
 }
+

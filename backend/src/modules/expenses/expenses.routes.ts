@@ -110,15 +110,13 @@ export const expensesRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * DELETE /expenses/:id
-   * Shielded: Operating expenses are immutable financial audit records.
+   * Admin-only: Delete manual operating expense.
    */
-  fastify.delete<{ Params: { id: string } }>('/expenses/:id', async (_request, reply) => {
-    return reply.status(400).send({
-      statusCode: 400,
-      error: {
-        code: 'BAD_REQUEST',
-        message: 'Expenses are immutable financial records. Deletion is not permitted.',
-      },
+  fastify.delete<{ Params: { id: string } }>('/expenses/:id', async (request, reply) => {
+    await ExpensesService.deleteExpense(request.params.id, request.user);
+    return reply.status(200).send({
+      success: true,
+      message: 'Expense deleted successfully',
     });
   });
 };

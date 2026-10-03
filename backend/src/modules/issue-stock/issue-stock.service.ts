@@ -478,4 +478,33 @@ export class IssueStockService {
 
     return issues.map((i) => this.sanitizeIssueStock(i));
   }
+
+  /**
+   * Delete an issue stock record by ID or Item ID, reverting any generated stock movements.
+   */
+  public static async deleteIssueStock(id: string): Promise<void> {
+    let issue = await prisma.issueStock.findUnique({ where: { id } });
+    if (!issue) {
+      // Check if id is an IssueStockItem ID
+      const item = await prisma.issueStockItem.findUnique({ where: { id } });
+      if (item) {
+        issue = await prisma.issueStock.findUnique({ where: { id: item.issueStockId } });
+      }
+    }
+
+    if (!issue) {
+      throw AppError.notFound('Stock issue record not found');
+    }
+
+    const issueId = issue.id;
+    await prisma.$transaction(async (tx) => {
+      await tx.stockMovement.deleteMany({
+        where: { issueStockId: issueId },
+      });
+      await tx.issueStock.delete({
+        where: { id: issueId },
+      });
+    });
+  }
 }
+

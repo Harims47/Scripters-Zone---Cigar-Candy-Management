@@ -139,4 +139,9 @@ export class DailyHandoverService {
   static async recordCollection(id: string, data: { cashCollected: number; gpayCollected: number; notes?: string }) {
     return ApiClient.post<BackendDailyHandover>(`/daily-handovers/${id}/collection`, data);
   }
+
+  static async deleteDailyHandover(id: string) {
+    return ApiClient.delete(`/daily-handovers/${id}`);
+  }
 }
+

@@ -64,4 +64,9 @@ export class SalesTargetService {
   static async toggleSalesTargetStatus(id: string, active: boolean) {
     return ApiClient.patch<BackendSalesTarget>(`/sales-targets/${id}/status`, { active });
   }
+
+  static async deleteSalesTarget(id: string) {
+    return ApiClient.delete(`/sales-targets/${id}`);
+  }
 }
+

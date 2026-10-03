@@ -42,4 +42,9 @@ export class AttendanceService {
   }) {
     return ApiClient.post<BackendAttendance>('/attendance', data);
   }
+
+  static async deleteAttendance(id: string) {
+    return ApiClient.delete(`/attendance/${id}`);
+  }
 }
+

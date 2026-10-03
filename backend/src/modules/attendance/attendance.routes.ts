@@ -110,15 +110,13 @@ export const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * DELETE /attendance/:id
-   * Shielded: Attendance records are immutable audit logs.
+   * Admin-only: Delete attendance record.
    */
-  fastify.delete<{ Params: { id: string } }>('/attendance/:id', async (_request, reply) => {
-    return reply.status(400).send({
-      statusCode: 400,
-      error: {
-        code: 'BAD_REQUEST',
-        message: 'Attendance records are immutable audit logs. Deletion is not permitted.',
-      },
+  fastify.delete<{ Params: { id: string } }>('/attendance/:id', async (request, reply) => {
+    await AttendanceService.deleteAttendance(request.params.id, request.user);
+    return reply.status(200).send({
+      success: true,
+      message: 'Attendance record deleted successfully',
     });
   });
 };

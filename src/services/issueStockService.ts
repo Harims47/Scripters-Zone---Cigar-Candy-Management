@@ -65,4 +65,9 @@ export class IssueStockService {
   }) {
     return ApiClient.post<BackendIssueStock>('/issue-stock', data);
   }
+
+  static async deleteIssueStock(id: string) {
+    return ApiClient.delete(`/issue-stock/${id}`);
+  }
 }
+

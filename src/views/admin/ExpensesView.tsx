@@ -25,6 +25,7 @@ import { TablePagination } from '../../components/ui/TablePagination';
 import { SortableHeader } from '../../components/ui/SortableHeader';
 import { TableEmptyState } from '../../components/ui/TableEmptyState';
 import { useTableState } from '../../utils/useTableState';
+import { DeleteConfirmModal } from '../../components/modals/DeleteConfirmModal';
 
 // Only these three categories can be manually recorded
 const MANUAL_CATEGORIES = ['Office', 'House', 'GPI'] as const;
@@ -63,6 +64,7 @@ export const ExpensesView: React.FC = () => {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<string>('ALL');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Form State (Only Office, House, GPI)
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -684,9 +686,10 @@ export const ExpensesView: React.FC = () => {
                           className="btn btn-secondary"
                           style={{ padding: '4px 6px', color: '#ef4444' }}
                           onClick={() => {
-                            if (confirm('Delete this manual expense entry?')) {
-                              deleteExpense(row.id);
-                            }
+                            setDeleteTarget({
+                              id: row.id,
+                              name: `${row.displayCategory || 'Manual'} expense (₹${row.amount})`
+                            });
                           }}
                           title="Delete Expense"
                         >
@@ -709,6 +712,20 @@ export const ExpensesView: React.FC = () => {
           itemLabel="expenses"
         />
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteExpense(deleteTarget.id);
+            toast.info('Expense deleted.');
+            setDeleteTarget(null);
+          }
+        }}
+        itemName={deleteTarget ? deleteTarget.name : ''}
+      />
     </div>
   );
 };

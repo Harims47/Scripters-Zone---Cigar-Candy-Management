@@ -24,6 +24,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import { DeleteConfirmModal } from '../../components/modals/DeleteConfirmModal';
 
 export const HandoverHubView: React.FC = () => {
   const { handovers, confirmHandoverCollection, deleteHandover, activeSession } = useHub();
@@ -43,6 +44,7 @@ export const HandoverHubView: React.FC = () => {
   const [reviewHandover, setReviewHandover] = useState<DailyHandover | null>(null);
   const [reviewCash, setReviewCash] = useState<string>('');
   const [reviewGPay, setReviewGPay] = useState<string>('');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string>('');
   const [showProductDetails, setShowProductDetails] = useState(false);
 
@@ -566,10 +568,7 @@ export const HandoverHubView: React.FC = () => {
                               className="btn btn-secondary"
                               style={{ padding: '4px 6px', color: '#ef4444' }}
                               onClick={() => {
-                                if (window.confirm(`Delete handover ${h.handoverNumber}?`)) {
-                                  deleteHandover(h.id);
-                                  toast.info(`Deleted ${h.handoverNumber}`);
-                                }
+                                setDeleteTarget({ id: h.id, name: `handover ${h.handoverNumber}` });
                               }}
                               title="Delete record"
                             >
@@ -781,10 +780,7 @@ export const HandoverHubView: React.FC = () => {
                                 className="btn btn-secondary"
                                 style={{ padding: '4px 6px', color: '#ef4444' }}
                                 onClick={() => {
-                                  if (window.confirm(`Delete dealer handover ${h.handoverNumber}?`)) {
-                                    deleteHandover(h.id);
-                                    toast.info(`Deleted ${h.handoverNumber}`);
-                                  }
+                                  setDeleteTarget({ id: h.id, name: `dealer handover ${h.handoverNumber}` });
                                 }}
                               >
                                 <Trash2 size={13} />
@@ -1188,6 +1184,20 @@ export const HandoverHubView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteHandover(deleteTarget.id);
+            toast.info(`Deleted ${deleteTarget.name}`);
+            setDeleteTarget(null);
+          }
+        }}
+        itemName={deleteTarget ? deleteTarget.name : ''}
+      />
     </div>
   );
 };

@@ -67,4 +67,14 @@ export const personRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       return reply.send(successResponse(person));
     }
   );
+
+  // 6. DELETE /api/v1/persons/:id — Delete or deactivate person (ADMIN only)
+  fastify.delete<{ Params: { id: string } }>(
+    '/persons/:id',
+    { preHandler: [requireAdmin] },
+    async (request, reply) => {
+      const result = await PersonsService.deletePerson(request.params.id);
+      return reply.send(successResponse(result, 'Person deleted successfully'));
+    }
+  );
 };

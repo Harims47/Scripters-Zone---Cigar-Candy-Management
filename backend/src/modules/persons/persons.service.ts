@@ -188,4 +188,55 @@ export class PersonsService {
 
     return this.sanitizePerson(updated);
   }
+
+  /**
+   * Delete person by ID. Hard deletes if no transaction history, otherwise deactivates.
+   */
+  public static async deletePerson(id: string): Promise<{ deleted: boolean; deactivated?: boolean }> {
+    const person = await prisma.person.findUnique({
+      where: { id },
+      include: {
+        salesmanHandovers: { select: { id: true } },
+        dealerHandovers: { select: { id: true } },
+        salesmanIssues: { select: { id: true } },
+        dealerIssues: { select: { id: true } },
+        salesmanLedgerTransactions: { select: { id: true } },
+        attendances: { select: { id: true } },
+        salaries: { select: { id: true } },
+      },
+    });
+
+    if (!person) {
+      throw AppError.notFound('Person record not found');
+    }
+
+    const hasTransactions =
+      person.salesmanHandovers.length > 0 ||
+      person.dealerHandovers.length > 0 ||
+      person.salesmanIssues.length > 0 ||
+      person.dealerIssues.length > 0 ||
+      person.salesmanLedgerTransactions.length > 0 ||
+      person.attendances.length > 0 ||
+      person.salaries.length > 0;
+
+    if (!hasTransactions) {
+      await prisma.$transaction(async (tx) => {
+        await tx.salesTarget.deleteMany({ where: { salesmanId: id } });
+        await tx.user.deleteMany({ where: { personId: id } });
+        await tx.person.delete({ where: { id } });
+      });
+      return { deleted: true };
+    } else {
+      await prisma.person.update({
+        where: { id },
+        data: { active: false },
+      });
+      await prisma.user.updateMany({
+        where: { personId: id },
+        data: { isActive: false },
+      });
+      return { deleted: false, deactivated: true };
+    }
+  }
 }
+

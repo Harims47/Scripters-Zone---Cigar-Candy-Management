@@ -7,6 +7,7 @@ import {
 } from './dealers.schemas.js';
 import { DealerSummary } from './dealers.types.js';
 import { PersonType, Prisma } from '@prisma/client';
+import { PersonsService } from '../persons/persons.service.js';
 
 export class DealersService {
   private static sanitizeDealer(person: any): DealerSummary {
@@ -130,5 +131,20 @@ export class DealersService {
     });
 
     return this.sanitizeDealer(updated);
+  }
+
+  /**
+   * Delete or deactivate a Dealer record (ADMIN only)
+   */
+  public static async deleteDealer(id: string): Promise<{ deleted: boolean; deactivated?: boolean }> {
+    const existing = await prisma.person.findFirst({
+      where: { id, type: PersonType.DEALER },
+    });
+
+    if (!existing) {
+      throw AppError.notFound(`Dealer with ID "${id}" not found`);
+    }
+
+    return PersonsService.deletePerson(id);
   }
 }

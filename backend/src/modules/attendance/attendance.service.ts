@@ -234,4 +234,21 @@ export class AttendanceService {
       totalRecordedDays: presentDays + absentDays,
     };
   }
+
+  /**
+   * Delete attendance record by ID.
+   */
+  static async deleteAttendance(id: string, currentUser?: { role?: string }): Promise<void> {
+    if (currentUser?.role && currentUser.role !== UserRole.ADMIN) {
+      throw AppError.forbidden('Only Admin can delete attendance records');
+    }
+
+    const existing = await prisma.salesmanAttendance.findUnique({ where: { id } });
+    if (!existing) {
+      throw AppError.notFound('Attendance record not found');
+    }
+
+    await prisma.salesmanAttendance.delete({ where: { id } });
+  }
 }
+

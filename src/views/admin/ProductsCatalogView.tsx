@@ -6,6 +6,7 @@ import { TablePagination } from '../../components/ui/TablePagination';
 import { SortableHeader } from '../../components/ui/SortableHeader';
 import { TableEmptyState } from '../../components/ui/TableEmptyState';
 import { ProductFormModal } from '../../components/modals/ProductFormModal';
+import { DeleteConfirmModal } from '../../components/modals/DeleteConfirmModal';
 import { exportToCSV, exportToExcel, exportToPDF } from '../../utils/exportHelpers';
 import { useTableState } from '../../utils/useTableState';
 import { Search, Plus, Edit2, Trash2, Package } from 'lucide-react';
@@ -19,6 +20,7 @@ export const ProductsCatalogView: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const availableSubCategories = useMemo(() => {
     const set = new Set<string>();
@@ -31,9 +33,10 @@ export const ProductsCatalogView: React.FC = () => {
   // Filtering
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
+      const q = searchTerm.trim().toLowerCase();
+      if (p.active === false && !q) return false;
       const matchCat = categoryFilter === 'ALL' || p.category === categoryFilter;
       const matchSub = subCategoryFilter === 'ALL' || p.subCategory === subCategoryFilter;
-      const q = searchTerm.trim().toLowerCase();
       const matchSearch =
         !q ||
         (p.name && p.name.toLowerCase().includes(q)) ||
@@ -99,9 +102,7 @@ export const ProductsCatalogView: React.FC = () => {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete ${name} from the Product Master?`)) {
-      deleteProduct(id);
-    }
+    setDeleteTarget({ id, name });
   };
 
   // Exports
@@ -355,6 +356,18 @@ export const ProductsCatalogView: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         productToEdit={editingProduct}
+      />
+
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteProduct(deleteTarget.id);
+            setDeleteTarget(null);
+          }
+        }}
+        itemName={deleteTarget ? `${deleteTarget.name} from the Product Master` : ''}
       />
     </div>
   );

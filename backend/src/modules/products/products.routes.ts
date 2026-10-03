@@ -92,4 +92,14 @@ export const productRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
       return reply.status(201).send(successResponse(initialStock));
     }
   );
+
+  // 8. DELETE /api/v1/products/:id — Delete or deactivate product (ADMIN only)
+  fastify.delete<{ Params: { id: string } }>(
+    '/products/:id',
+    { preHandler: [requireAdmin] },
+    async (request, reply) => {
+      const result = await ProductsService.deleteProduct(request.params.id);
+      return reply.send(successResponse(result, 'Product deleted successfully'));
+    }
+  );
 };

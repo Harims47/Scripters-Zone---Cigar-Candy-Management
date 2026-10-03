@@ -8,6 +8,7 @@ import { TableEmptyState } from '../../components/ui/TableEmptyState';
 import { useTableState } from '../../utils/useTableState';
 import { exportToCSV, exportToExcel, exportToPDF } from '../../utils/exportHelpers';
 import { IssueQuantityModal } from '../../components/modals/IssueQuantityModal';
+import { DeleteConfirmModal } from '../../components/modals/DeleteConfirmModal';
 import {
   ArrowUpRight,
   Search,
@@ -35,6 +36,7 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
   const toast = useToast();
 
   const [isIssueModalOpen, setIsIssueModalOpen] = useState<boolean>(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; issueNumber: string } | null>(null);
 
   // History Register Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -436,10 +438,7 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
                         type="button"
                         className="btn-icon danger"
                         onClick={() => {
-                          if (window.confirm(`Delete issue record ${qi.issueNumber}?`)) {
-                            deleteQuantityIssue(qi.id);
-                            toast.info('Quantity issue deleted.');
-                          }
+                          setDeleteTarget({ id: qi.id, issueNumber: qi.issueNumber });
                         }}
                         title="Delete issue record"
                       >
@@ -468,6 +467,20 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
       <IssueQuantityModal
         isOpen={isIssueModalOpen}
         onClose={() => setIsIssueModalOpen(false)}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteQuantityIssue(deleteTarget.id);
+            toast.info('Quantity issue deleted.');
+            setDeleteTarget(null);
+          }
+        }}
+        itemName={deleteTarget ? `issue record ${deleteTarget.issueNumber}` : ''}
       />
     </div>
   );

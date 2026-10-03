@@ -20,6 +20,7 @@ import {
   Edit2,
   X
 } from 'lucide-react';
+import { DeleteConfirmModal } from '../../components/modals/DeleteConfirmModal';
 
 export const SalesTargetsView: React.FC = () => {
   const { persons, products, handovers, salesTargets, addSalesTarget, updateSalesTarget, deleteSalesTarget } = useHub();
@@ -34,6 +35,7 @@ export const SalesTargetsView: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [targetSalesmanId, setTargetSalesmanId] = useState<string>(salesmen[0]?.id || '');
   const [targetDate, setTargetDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [period, setPeriod] = useState<TargetPeriod>('DAILY');
@@ -48,6 +50,7 @@ export const SalesTargetsView: React.FC = () => {
   // Stock Issued is NOT actual sales. Achievement must use actual sales/handover transactions!
   const targetPerformance = useMemo(() => {
     return salesTargets
+      .filter((t) => t.active !== false)
       .filter((t) => t.targetType === 'VALUE')
       .filter((t) => filterSalesmanId === 'ALL' || t.salesmanId === filterSalesmanId)
       .filter((t) => filterPeriod === 'ALL' || t.period === filterPeriod)
@@ -247,11 +250,11 @@ export const SalesTargetsView: React.FC = () => {
     setEditingTargetId(null);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Delete this sales target?')) {
-      deleteSalesTarget(id);
-      toast.info('Sales target removed.');
-    }
+  const handleDelete = (id: string, salesmanName?: string) => {
+    setDeleteTarget({
+      id,
+      name: salesmanName ? `sales target for ${salesmanName}` : 'this sales target'
+    });
   };
 
   const avgAchievement =
@@ -532,7 +535,7 @@ export const SalesTargetsView: React.FC = () => {
                         type="button"
                         className="btn btn-secondary"
                         style={{ padding: '5px 7px', color: '#ef4444' }}
-                        onClick={() => handleDelete(t.id)}
+                        onClick={() => handleDelete(t.id, t.salesmanName)}
                         title="Delete Target"
                       >
                         <Trash2 size={13} />
@@ -729,6 +732,20 @@ export const SalesTargetsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteSalesTarget(deleteTarget.id);
+            toast.info('Sales target removed.');
+            setDeleteTarget(null);
+          }
+        }}
+        itemName={deleteTarget ? deleteTarget.name : ''}
+      />
     </div>
   );
 };

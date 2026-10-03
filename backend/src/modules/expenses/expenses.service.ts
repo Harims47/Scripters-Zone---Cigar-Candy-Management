@@ -261,4 +261,16 @@ export class ExpensesService {
       totalCompanyCostImpact: totalCompanyCostImpactDecimal.toNumber(),
     };
   }
+
+  /**
+   * Delete a manual operating expense by ID.
+   */
+  public static async deleteExpense(id: string, _user?: any): Promise<void> {
+    const existing = await prisma.expense.findUnique({ where: { id } });
+    if (!existing) {
+      throw AppError.notFound('Expense not found');
+    }
+    await prisma.expense.delete({ where: { id } });
+  }
 }
+

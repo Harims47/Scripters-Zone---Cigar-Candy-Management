@@ -141,16 +141,14 @@ export const dailyHandoverRoutes: FastifyPluginAsync = async (fastify: FastifyIn
 
   /**
    * DELETE /daily-handovers/:id
-   * Shielded: Daily Handovers are immutable financial audit records.
+   * Admin or creator delete daily handover.
    */
-  fastify.delete<{ Params: { id: string } }>('/daily-handovers/:id', async (_request, reply) => {
-    return reply.status(400).send({
-      statusCode: 400,
-      error: {
-        code: 'BAD_REQUEST',
-        message:
-          'Daily handovers cannot be deleted. Daily handovers represent immutable actual-sales and financial audit records.',
-      },
+  fastify.delete<{ Params: { id: string } }>('/daily-handovers/:id', async (request, reply) => {
+    const { id } = request.params;
+    await DailyHandoversService.deleteDailyHandover(id, request.user);
+    return reply.status(200).send({
+      success: true,
+      message: 'Daily handover deleted successfully',
     });
   });
 };

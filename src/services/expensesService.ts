@@ -43,4 +43,9 @@ export class ExpensesService {
   }) {
     return ApiClient.post<BackendExpense>('/expenses', data);
   }
+
+  static async deleteExpense(id: string) {
+    return ApiClient.delete(`/expenses/${id}`);
+  }
 }
+

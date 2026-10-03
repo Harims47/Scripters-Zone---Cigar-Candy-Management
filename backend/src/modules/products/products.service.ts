@@ -121,9 +121,14 @@ export class ProductsService {
     });
 
     if (existing) {
-      throw AppError.conflict(
-        `A product named "${trimmedName}" under category ${input.category} and brand ${input.brand} already exists`
-      );
+      if (!existing.active) {
+        // If the product was previously deactivated/deleted, remove it so new creation succeeds cleanly
+        await this.deleteProduct(existing.id);
+      } else {
+        throw AppError.conflict(
+          `A product named "${trimmedName}" under category ${input.category} and brand ${input.brand} already exists`
+        );
+      }
     }
 
     // 2. Generate or validate SKU
@@ -388,4 +393,49 @@ export class ProductsService {
       updatedAt: created.updatedAt,
     };
   }
+
+  /**
+   * Delete product by ID. If product has no transaction history, hard deletes it.
+   * If product has transaction history, sets active = false.
+   */
+  public static async deleteProduct(id: string): Promise<{ deleted: boolean; deactivated?: boolean }> {
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: {
+        purchaseInvoiceItems: { select: { id: true } },
+        stockMovements: { select: { id: true } },
+        issueStockItems: { select: { id: true } },
+        handoverItems: { select: { id: true } },
+      },
+    });
+
+    if (!product) {
+      throw AppError.notFound(`Product with ID "${id}" not found.`);
+    }
+
+    const hasTransactions =
+      product.purchaseInvoiceItems.length > 0 ||
+      product.stockMovements.length > 0 ||
+      product.issueStockItems.length > 0 ||
+      product.handoverItems.length > 0;
+
+    if (!hasTransactions) {
+      await prisma.$transaction(async (tx) => {
+        await tx.salesTargetProduct.deleteMany({ where: { productId: id } });
+        await tx.dailyHandoverEmptyPacket.deleteMany({ where: { productId: id } });
+        await tx.dailyHandoverCoupon.deleteMany({ where: { productId: id } });
+        await tx.productUomConversion.deleteMany({ where: { productId: id } });
+        await tx.initialStock.deleteMany({ where: { productId: id } });
+        await tx.product.delete({ where: { id } });
+      });
+      return { deleted: true };
+    } else {
+      await prisma.product.update({
+        where: { id },
+        data: { active: false },
+      });
+      return { deleted: false, deactivated: true };
+    }
+  }
 }
+

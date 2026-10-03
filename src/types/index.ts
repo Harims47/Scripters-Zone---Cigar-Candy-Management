@@ -36,6 +36,7 @@ export interface Person {
   name: string;
   phone: string;
   role: 'SALESMAN' | 'DEALER';
+  active?: boolean;
   avatarColor?: string;
   notes?: string;
   baseSalary?: number;             // For salary calculations
@@ -256,6 +257,7 @@ export interface PurchaseInvoice {
 // Quantity Issue (Stock issued by admin to salesman before day's run)
 export interface QuantityIssue {
   id: string;
+  issueStockId?: string;
   issueNumber: string;
   personId: string;
   personName: string;
@@ -414,6 +416,7 @@ export interface SalesTarget {
   targetUOM?: ProductUOM;
   productTargets?: ProductTargetItem[]; // Product-level target quantities per Item 11
   notes?: string;
+  active?: boolean;
   createdAt: string;
 }
 

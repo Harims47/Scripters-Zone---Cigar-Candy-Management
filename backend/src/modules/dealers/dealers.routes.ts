@@ -66,4 +66,14 @@ export const dealerRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       return reply.send(successResponse(dealer));
     }
   );
+
+  // 6. DELETE /api/v1/dealers/:id — Delete or deactivate dealer (ADMIN only)
+  fastify.delete<{ Params: { id: string } }>(
+    '/dealers/:id',
+    { preHandler: [requireAdmin] },
+    async (request, reply) => {
+      const result = await DealersService.deleteDealer(request.params.id);
+      return reply.send(successResponse(result, 'Dealer deleted successfully'));
+    }
+  );
 };

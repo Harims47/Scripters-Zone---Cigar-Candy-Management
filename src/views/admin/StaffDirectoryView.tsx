@@ -6,6 +6,7 @@ import { SortableHeader } from '../../components/ui/SortableHeader';
 import { TableEmptyState } from '../../components/ui/TableEmptyState';
 import { useTableState } from '../../utils/useTableState';
 import { PlusCircle, Users, Search, Phone, Store, Trash2, Edit2, CheckCircle, X, Key, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { DeleteConfirmModal } from '../../components/modals/DeleteConfirmModal';
 
 export interface StaffDirectoryViewProps {
   initialRoleFilter?: 'ALL' | 'SALESMAN' | 'DEALER';
@@ -23,6 +24,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({ initialR
     }
   }, [initialRoleFilter]);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -36,11 +38,12 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({ initialR
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const salesmenCount = persons.filter((p) => p.role === 'SALESMAN').length;
-  const dealersCount = persons.filter((p) => p.role === 'DEALER').length;
+  const salesmenCount = persons.filter((p) => p.role === 'SALESMAN' && p.active !== false).length;
+  const dealersCount = persons.filter((p) => p.role === 'DEALER' && p.active !== false).length;
 
   const filtered = useMemo(() => {
     return persons.filter((p) => {
+      if (p.active === false) return false;
       const matchesSearch =
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.phone.includes(searchTerm);
       const matchesRole = roleFilter === 'ALL' || p.role === roleFilter;
@@ -328,9 +331,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({ initialR
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`Delete ${p.name}?`)) {
-                            deletePerson(p.id);
-                          }
+                          setDeleteTarget({ id: p.id, name: p.name });
                         }}
                         style={{
                           background: '#fff1f2',
@@ -654,6 +655,19 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({ initialR
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deletePerson(deleteTarget.id);
+            setDeleteTarget(null);
+          }
+        }}
+        itemName={deleteTarget ? deleteTarget.name : ''}
+      />
     </div>
   );
 };

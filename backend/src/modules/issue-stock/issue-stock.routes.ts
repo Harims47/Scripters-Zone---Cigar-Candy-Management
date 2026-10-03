@@ -55,14 +55,13 @@ export const issueStockRoutes: FastifyPluginAsync = async (fastify: FastifyInsta
     }
   );
 
-  // 5. DELETE /api/v1/issue-stock/:id — Deletion prohibited to preserve inventory integrity (Section 31)
+  // 5. DELETE /api/v1/issue-stock/:id — Delete stock issue & revert movements (ADMIN only)
   fastify.delete<{ Params: { id: string } }>(
     '/issue-stock/:id',
     { preHandler: [requireAdmin] },
-    async () => {
-      throw AppError.badRequest(
-        'Direct deletion of stock issues is not permitted to preserve inventory ledger integrity.'
-      );
+    async (request, reply) => {
+      await IssueStockService.deleteIssueStock(request.params.id);
+      return reply.send(successResponse(null, 'Stock issue deleted successfully'));
     }
   );
 };

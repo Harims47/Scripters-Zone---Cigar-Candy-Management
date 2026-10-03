@@ -206,6 +206,7 @@ const mapBackendPerson = (p: BackendPerson): Person => ({
   name: p.name,
   phone: p.phone || '',
   role: 'SALESMAN',
+  active: p.active,
   avatarColor: '#4f46e5',
   notes: p.user?.username ? `@${p.user.username}` : (p.address || ''),
   username: p.user?.username || (p as any).username || undefined,
@@ -217,6 +218,7 @@ const mapBackendDealer = (d: BackendDealer): Person => ({
   name: d.name,
   phone: d.phone || '',
   role: 'DEALER',
+  active: d.active,
   avatarColor: '#0284c7',
   notes: d.address || '',
   createdAt: d.createdAt || new Date().toISOString(),
@@ -359,6 +361,7 @@ const mapBackendIssueStockList = (issues: BackendIssueStock[], prods: Product[] 
       const p = prods.find((prod) => prod.id === it.productId);
       result.push({
         id: it.id || `${issue.id}-${it.productId}`,
+        issueStockId: issue.id,
         issueNumber: issueNum,
         personId,
         personName,
@@ -424,6 +427,7 @@ const mapBackendTarget = (tgt: BackendSalesTarget): SalesTarget => ({
   period: 'DAILY',
   targetType: 'VALUE',
   targetValue: Number(tgt.dailyRevenueTarget),
+  active: (tgt as any).active !== undefined ? (tgt as any).active : true,
   productTargets: (tgt.productTargets || []).map((pt) => ({
     productId: pt.productId,
     productName: pt.productName || '',
@@ -974,11 +978,12 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteProduct = (id: string) => {
     setProducts((prev) => prev.filter((item) => item.id !== id));
-    MasterDataService.toggleProductStatus(id, false)
+    MasterDataService.deleteProduct(id)
       .then(() => refreshAll())
       .catch((err) => {
         console.error('Failed to delete product:', err);
         setError(err.message);
+        refreshAll();
       });
   };
 
@@ -1028,11 +1033,18 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deletePerson = (id: string) => {
     const target = persons.find((p) => p.id === id);
     setPersons((prev) => prev.filter((i) => i.id !== id));
-    if (target?.role === 'DEALER') {
-      MasterDataService.toggleDealerStatus(id, false)
-        .then(() => refreshAll())
-        .catch((err) => setError(err.message));
-    }
+    const deletePromise =
+      target?.role === 'DEALER'
+        ? MasterDataService.deleteDealer(id)
+        : MasterDataService.deletePerson(id);
+
+    deletePromise
+      .then(() => refreshAll())
+      .catch((err) => {
+        console.error('Failed to delete person:', err);
+        setError(err.message);
+        refreshAll();
+      });
   };
 
   const addPurchaseInvoice = async (inv: Omit<PurchaseInvoice, 'id' | 'invoiceNumber'>): Promise<{ invoice?: PurchaseInvoice; error?: string }> => {
@@ -1239,6 +1251,13 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteHandover = (id: string) => {
     setHandovers((prev) => prev.filter((h) => h.id !== id));
+    DailyHandoverService.deleteDailyHandover(id)
+      .then(() => refreshAll())
+      .catch((err) => {
+        console.error('Failed to delete handover:', err);
+        setError(err.message);
+        refreshAll();
+      });
   };
 
   const recordOutstandingPayment = (
@@ -1296,6 +1315,13 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteExpense = (id: string) => {
     setExpenses((prev) => prev.filter((i) => i.id !== id));
+    ExpensesService.deleteExpense(id)
+      .then(() => refreshAll())
+      .catch((err) => {
+        console.error('Failed to delete expense:', err);
+        setError(err.message);
+        refreshAll();
+      });
   };
 
   const markAttendance = (record: Omit<AttendanceRecord, 'id' | 'createdAt'>): { record?: AttendanceRecord; error?: string } => {
@@ -1340,6 +1366,13 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteAttendance = (id: string) => {
     setAttendance((prev) => prev.filter((a) => a.id !== id));
+    AttendanceService.deleteAttendance(id)
+      .then(() => refreshAll())
+      .catch((err) => {
+        console.error('Failed to delete attendance:', err);
+        setError(err.message);
+        refreshAll();
+      });
   };
 
   const addLedgerEntry = (entry: Omit<SalesmanLedgerEntry, 'id' | 'createdAt' | 'runningBalance'>): SalesmanLedgerEntry => {
@@ -1564,9 +1597,13 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteSalesTarget = (id: string) => {
     setSalesTargets((prev) => prev.filter((t) => t.id !== id));
-    SalesTargetService.toggleSalesTargetStatus(id, false)
+    SalesTargetService.deleteSalesTarget(id)
       .then(() => refreshAll())
-      .catch((err) => setError(err.message));
+      .catch((err) => {
+        console.error('Failed to delete sales target:', err);
+        setError(err.message);
+        refreshAll();
+      });
   };
 
   const addPurchaseOrder = (po: Omit<PurchaseOrder, 'id' | 'poNumber'>): PurchaseOrder => {
@@ -1594,7 +1631,18 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteQuantityIssue = (id: string) => {
-    setQuantityIssues((prev) => prev.filter((q) => q.id !== id));
+    const target = quantityIssues.find((q) => q.id === id);
+    const deleteId = target?.issueStockId || id;
+    setQuantityIssues((prev) =>
+      prev.filter((q) => q.id !== id && (!target?.issueStockId || q.issueStockId !== target.issueStockId))
+    );
+    IssueStockService.deleteIssueStock(deleteId)
+      .then(() => refreshAll())
+      .catch((err) => {
+        console.error('Failed to delete quantity issue:', err);
+        setError(err.message);
+        refreshAll();
+      });
   };
 
   const resetDemoData = () => {

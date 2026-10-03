@@ -84,14 +84,13 @@ export const salesTargetRoutes: FastifyPluginAsync = async (fastify: FastifyInst
     }
   );
 
-  // 7. DELETE /api/v1/sales-targets/:id — Direct deletion prohibited (Section 17)
+  // 7. DELETE /api/v1/sales-targets/:id — Delete sales target (ADMIN only)
   fastify.delete<{ Params: { id: string } }>(
     '/sales-targets/:id',
     { preHandler: [requireAdmin] },
-    async () => {
-      throw AppError.badRequest(
-        'Direct deletion of sales targets is not permitted. Please deactivate the target instead to preserve historical records.'
-      );
+    async (request, reply) => {
+      await SalesTargetsService.deleteSalesTarget(request.params.id);
+      return reply.send(successResponse(null, 'Sales target deleted successfully'));
     }
   );
 };

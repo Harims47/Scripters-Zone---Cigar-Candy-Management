@@ -22,6 +22,7 @@ import { TablePagination } from '../../components/ui/TablePagination';
 import { SortableHeader } from '../../components/ui/SortableHeader';
 import { TableEmptyState } from '../../components/ui/TableEmptyState';
 import { useTableState } from '../../utils/useTableState';
+import { DeleteConfirmModal } from '../../components/modals/DeleteConfirmModal';
 
 interface DealerRowInput {
   qty: string;
@@ -36,6 +37,7 @@ export const DealerSalesView: React.FC = () => {
   const dealers = useMemo(() => persons.filter((p) => p.role === 'DEALER'), [persons]);
 
   const [activeTab, setActiveTab] = useState<'RECORD_SALE' | 'SALE_HISTORY'>('RECORD_SALE');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Transaction form state
   const [selectedDealerId, setSelectedDealerId] = useState<string>(dealers[0]?.id || '');
@@ -813,10 +815,10 @@ export const DealerSalesView: React.FC = () => {
                             type="button"
                             className="btn-icon danger"
                             onClick={() => {
-                              if (window.confirm(`Delete dealer transaction ${h.handoverNumber}?`)) {
-                                deleteHandover(h.id);
-                                toast.info('Transaction deleted.');
-                              }
+                              setDeleteTarget({
+                                id: h.id,
+                                name: `dealer transaction ${h.handoverNumber}`
+                              });
                             }}
                             title="Delete transaction"
                           >
@@ -882,6 +884,20 @@ export const DealerSalesView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteHandover(deleteTarget.id);
+            toast.info('Transaction deleted.');
+            setDeleteTarget(null);
+          }
+        }}
+        itemName={deleteTarget ? deleteTarget.name : ''}
+      />
     </div>
   );
 };

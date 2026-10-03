@@ -87,6 +87,10 @@ export class MasterDataService {
     return ApiClient.patch<BackendProduct>(`/products/${id}/status`, { active });
   }
 
+  static async deleteProduct(id: string) {
+    return ApiClient.delete(`/products/${id}`);
+  }
+
   // --- Dealers ---
   static async getDealers(params?: { active?: boolean; limit?: number; page?: number }) {
     const res = await ApiClient.get<any>('/dealers', {
@@ -112,6 +116,10 @@ export class MasterDataService {
     return ApiClient.patch<BackendDealer>(`/dealers/${id}/status`, { active });
   }
 
+  static async deleteDealer(id: string) {
+    return ApiClient.delete(`/dealers/${id}`);
+  }
+
   // --- Persons / Salesmen ---
   static async getPersons(params?: { type?: string; active?: boolean; limit?: number; page?: number }) {
     const res = await ApiClient.get<any>('/persons', {
@@ -127,6 +135,10 @@ export class MasterDataService {
 
   static async updatePerson(id: string, data: Partial<{ name: string; phone: string; address: string; active: boolean }>) {
     return ApiClient.patch<BackendPerson>(`/persons/${id}`, data);
+  }
+
+  static async deletePerson(id: string) {
+    return ApiClient.delete(`/persons/${id}`);
   }
 
   // --- Suppliers ---
