@@ -19,8 +19,10 @@ import {
   Calendar,
   Truck,
   Store,
+  Eye,
   X
 } from 'lucide-react';
+import { QuantityIssue } from '../../types';
 
 interface QuantityIssuesViewProps {
   onNavigate?: (tab: string) => void;
@@ -37,6 +39,7 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
 
   const [isIssueModalOpen, setIsIssueModalOpen] = useState<boolean>(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; issueNumber: string } | null>(null);
+  const [viewingIssue, setViewingIssue] = useState<QuantityIssue | null>(null);
 
   // History Register Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,6 +50,10 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
 
   const totalIssuedValue = useMemo(() => {
     return quantityIssues.reduce((acc, q) => {
+      if (q.totalValue !== undefined) return acc + q.totalValue;
+      if (q.items && q.items.length > 0) {
+        return acc + q.items.reduce((s, it) => s + (it.totalValue || (it.quantityIssued * (it.rate || 0))), 0);
+      }
       const prod = products.find((p) => p.id === q.productId);
       const rate = prod?.rate || 0;
       return acc + (q.quantityIssued || 0) * rate;
@@ -70,15 +77,19 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
     return quantityIssues.filter((qi) => {
       const matchRole = roleFilter === 'ALL' || qi.personRole === roleFilter;
       const search = searchTerm.trim().toLowerCase();
-      const matchSearch =
-        !search ||
+      if (!search) return matchRole;
+      const matchHeader =
         qi.personName.toLowerCase().includes(search) ||
-        qi.productName.toLowerCase().includes(search) ||
-        (qi.sku && qi.sku.toLowerCase().includes(search)) ||
-        (qi.subCategory && qi.subCategory.toLowerCase().includes(search)) ||
-        qi.brand.toLowerCase().includes(search) ||
-        qi.issueNumber.toLowerCase().includes(search);
-      return matchRole && matchSearch;
+        qi.issueNumber.toLowerCase().includes(search) ||
+        (qi.notes && qi.notes.toLowerCase().includes(search));
+      const matchItems =
+        qi.items?.some((it) =>
+          it.productName.toLowerCase().includes(search) ||
+          (it.sku && it.sku.toLowerCase().includes(search)) ||
+          (it.brand && it.brand.toLowerCase().includes(search)) ||
+          (it.category && it.category.toLowerCase().includes(search))
+        ) || (qi.productName && qi.productName.toLowerCase().includes(search));
+      return matchRole && (matchHeader || matchItems);
     });
   }, [quantityIssues, roleFilter, searchTerm]);
 
@@ -103,8 +114,8 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
       date: (q) => q.date,
       personName: (q) => q.personName,
       personRole: (q) => q.personRole,
-      productName: (q) => q.productName,
-      quantityIssued: (q) => q.quantityIssued,
+      quantityIssued: (q) => q.totalQuantity || q.quantityIssued || 0,
+      totalValue: (q) => q.totalValue || 0,
       notes: (q) => q.notes || ''
     }
   });
@@ -354,16 +365,18 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
                   currentSortDirection={sortDirection}
                   onSort={toggleSort}
                 />
+                <th>Products Issued</th>
                 <SortableHeader
-                  label="Product"
-                  field="productName"
+                  label="Total Quantity"
+                  field="quantityIssued"
                   currentSortField={sortField}
                   currentSortDirection={sortDirection}
                   onSort={toggleSort}
+                  align="right"
                 />
                 <SortableHeader
-                  label="Quantity Issued"
-                  field="quantityIssued"
+                  label="Total Value"
+                  field="totalValue"
                   currentSortField={sortField}
                   currentSortDirection={sortDirection}
                   onSort={toggleSort}
@@ -376,7 +389,7 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
             <tbody>
               {pagedData.length === 0 ? (
                 <TableEmptyState
-                  colSpan={8}
+                  colSpan={9}
                   title={searchTerm ? 'No matching stock issues' : 'No stock issues recorded'}
                   description={
                     searchTerm
@@ -388,65 +401,116 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
                   onAction={() => setIsIssueModalOpen(true)}
                 />
               ) : (
-                pagedData.map((qi) => (
-                  <tr key={qi.id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#4f46e5' }}>
-                      {qi.issueNumber}
-                    </td>
-                    <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{qi.date}</td>
-                    <td style={{ fontWeight: 700, color: '#0f172a' }}>{qi.personName}</td>
-                    <td>
-                      <span
-                        style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          background: qi.personRole === 'SALESMAN' ? '#eff6ff' : '#fef3c7',
-                          color: qi.personRole === 'SALESMAN' ? '#1d4ed8' : '#b45309'
-                        }}
-                      >
-                        {qi.personRole}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{qi.productName}</div>
-                      <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                        {qi.sku} • {qi.brand}
-                      </div>
-                    </td>
-                    <td className="num">
-                      <span
-                        style={{
-                          fontWeight: 800,
-                          color: '#0f172a',
-                          fontSize: '0.9rem',
-                          background: '#f8fafc',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          border: '1px solid #e2e8f0'
-                        }}
-                      >
-                        {qi.quantityIssued.toLocaleString()}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                      {qi.notes || '—'}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <button
-                        type="button"
-                        className="btn-icon danger"
-                        onClick={() => {
-                          setDeleteTarget({ id: qi.id, issueNumber: qi.issueNumber });
-                        }}
-                        title="Delete issue record"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                pagedData.map((qi) => {
+                  const itemCount = qi.items?.length || 1;
+                  const isMulti = itemCount > 1;
+
+                  return (
+                    <tr key={qi.id}>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#4f46e5' }}>
+                        {qi.issueNumber}
+                      </td>
+                      <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{qi.date}</td>
+                      <td style={{ fontWeight: 700, color: '#0f172a' }}>{qi.personName}</td>
+                      <td>
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            background: qi.personRole === 'SALESMAN' ? '#eff6ff' : '#fef3c7',
+                            color: qi.personRole === 'SALESMAN' ? '#1d4ed8' : '#b45309'
+                          }}
+                        >
+                          {qi.personRole}
+                        </span>
+                      </td>
+                      <td>
+                        {isMulti ? (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span
+                                style={{
+                                  background: '#e0e7ff',
+                                  color: '#4338ca',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.76rem',
+                                  fontWeight: 800,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => setViewingIssue(qi)}
+                                title="Click to view all products"
+                              >
+                                <Package size={13} /> {itemCount} Products
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '3px' }}>
+                              {qi.items.slice(0, 2).map((it) => `${it.productName} (${it.quantityIssued})`).join(', ')}
+                              {itemCount > 2 && ` +${itemCount - 2} more`}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                              {qi.items?.[0]?.productName || qi.productName}
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                              {qi.items?.[0]?.sku || qi.sku || '—'} • {qi.items?.[0]?.uom || qi.uom}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="num">
+                        <span
+                          style={{
+                            fontWeight: 800,
+                            color: '#0f172a',
+                            fontSize: '0.9rem',
+                            background: '#f8fafc',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid #e2e8f0'
+                          }}
+                        >
+                          {(qi.totalQuantity || qi.quantityIssued || 0).toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="num" style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.88rem' }}>
+                        ₹{(qi.totalValue || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                        {qi.notes || '—'}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => setViewingIssue(qi)}
+                            title="View itemized breakdown"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon danger"
+                            onClick={() => {
+                              setDeleteTarget({ id: qi.id, issueNumber: qi.issueNumber });
+                            }}
+                            title="Delete issue transaction"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -482,6 +546,146 @@ export const QuantityIssuesView: React.FC<QuantityIssuesViewProps> = () => {
         }}
         itemName={deleteTarget ? `issue record ${deleteTarget.issueNumber}` : ''}
       />
+
+      {/* Itemized Issue Details Breakdown Modal */}
+      {viewingIssue && (
+        <div className="modal-backdrop" onClick={() => setViewingIssue(null)}>
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '720px',
+              width: '95vw',
+              maxHeight: '90vh',
+              padding: 0,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: '16px',
+              background: '#ffffff',
+              boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.45)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: '16px 20px',
+                background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
+                  Issue Transaction: {viewingIssue.issueNumber}
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: '#c7d2fe', marginTop: '3px' }}>
+                  {viewingIssue.personName} ({viewingIssue.personRole}) • Date: {viewingIssue.date}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingIssue(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  padding: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>Product</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>SKU / Category</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center' }}>UOM</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Qty Issued</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Rate (₹)</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Total (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(viewingIssue.items && viewingIssue.items.length > 0 ? viewingIssue.items : [{
+                    id: viewingIssue.id,
+                    productId: viewingIssue.productId,
+                    productName: viewingIssue.productName,
+                    sku: viewingIssue.sku,
+                    category: viewingIssue.category,
+                    brand: viewingIssue.brand,
+                    uom: viewingIssue.uom,
+                    quantityIssued: viewingIssue.quantityIssued,
+                    rate: 0,
+                    totalValue: viewingIssue.totalValue
+                  }]).map((it, idx) => (
+                    <tr key={it.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>{it.productName}</td>
+                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: '0.78rem' }}>
+                        {it.sku ? `${it.sku} • ` : ''}{it.brand || it.category}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.74rem', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                          {it.uom}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
+                        {it.quantityIssued.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#64748b' }}>
+                        ₹{(it.rate || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>
+                        ₹{(it.totalValue || (it.quantityIssued * (it.rate || 0))).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: '#f8fafc', fontWeight: 800, borderTop: '2px solid #e2e8f0' }}>
+                    <td colSpan={3} style={{ padding: '12px', color: '#334155' }}>
+                      Transaction Total ({viewingIssue.items?.length || 1} {viewingIssue.items?.length === 1 ? 'Product' : 'Products'})
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', color: '#0f172a', fontSize: '0.92rem' }}>
+                      {(viewingIssue.totalQuantity || viewingIssue.quantityIssued || 0).toLocaleString()}
+                    </td>
+                    <td></td>
+                    <td style={{ padding: '12px', textAlign: 'right', color: '#059669', fontSize: '0.92rem' }}>
+                      ₹{(viewingIssue.totalValue || 0).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {viewingIssue.notes && (
+                <div style={{ marginTop: '16px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.82rem', color: '#64748b' }}>
+                  <strong>Notes / Route:</strong> {viewingIssue.notes}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setViewingIssue(null)}
+                style={{ minHeight: '38px', padding: '0 18px', fontWeight: 600 }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

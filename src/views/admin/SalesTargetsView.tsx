@@ -52,6 +52,7 @@ export const SalesTargetsView: React.FC = () => {
     return salesTargets
       .filter((t) => t.active !== false)
       .filter((t) => t.targetType === 'VALUE')
+      .filter((t) => Number(t.targetValue) > 0)
       .filter((t) => filterSalesmanId === 'ALL' || t.salesmanId === filterSalesmanId)
       .filter((t) => filterPeriod === 'ALL' || t.period === filterPeriod)
       .filter((t) => {

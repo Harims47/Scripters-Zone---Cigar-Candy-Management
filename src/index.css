@@ -55,6 +55,18 @@ textarea {
   color: inherit;
 }
 
+/* Hide spin buttons on number inputs globally (Chrome, Safari, Edge, Opera, Firefox) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 button {
   cursor: pointer;
   border: none;

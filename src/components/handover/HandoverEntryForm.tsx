@@ -68,7 +68,13 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
   const issuedProductMap = useMemo(() => {
     const map: Record<string, number> = {};
     relevantIssues.forEach((qi) => {
-      map[qi.productId] = (map[qi.productId] || 0) + (qi.quantityIssued || 0);
+      if (qi.items && qi.items.length > 0) {
+        qi.items.forEach((it) => {
+          map[it.productId] = (map[it.productId] || 0) + (it.quantityIssued || 0);
+        });
+      } else if (qi.productId) {
+        map[qi.productId] = (map[qi.productId] || 0) + (qi.quantityIssued || 0);
+      }
     });
     return map;
   }, [relevantIssues]);
@@ -114,7 +120,13 @@ export const HandoverEntryForm: React.FC<HandoverEntryFormProps> = ({
 
     const map: Record<string, number> = {};
     personIssues.forEach((qi) => {
-      map[qi.productId] = (map[qi.productId] || 0) + (qi.quantityIssued || 0);
+      if (qi.items && qi.items.length > 0) {
+        qi.items.forEach((it) => {
+          map[it.productId] = (map[it.productId] || 0) + (it.quantityIssued || 0);
+        });
+      } else if (qi.productId) {
+        map[qi.productId] = (map[qi.productId] || 0) + (qi.quantityIssued || 0);
+      }
     });
 
     products.forEach((p) => {

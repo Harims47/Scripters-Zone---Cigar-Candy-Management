@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useHub } from '../../context/HubContext';
-import { ArrowUpRight, X, AlertCircle, CheckCircle, Plus, Trash2, Target } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
+import { ArrowUpRight, X, AlertCircle, AlertTriangle, CheckCircle, Plus, Trash2, Target } from 'lucide-react';
 
 interface IssueQuantityModalProps {
   isOpen: boolean;
@@ -22,7 +23,18 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
   onSuccess,
   initialPersonId
 }) => {
-  const { products, persons, salesTargets, addQuantityIssue, addSalesTarget, updateSalesTarget } = useHub();
+  const {
+    products,
+    persons,
+    salesTargets,
+    addSalesTarget,
+    updateSalesTarget,
+    getProductStockBase,
+    createIssueStockTransaction
+  } = useHub();
+
+  const toast = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const activeProducts = useMemo(() => products.filter((p) => p.active), [products]);
 
@@ -65,6 +77,8 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
 
       if (activeProducts.length > 0) {
         const firstProd = activeProducts[0];
+        const stock = getProductStockBase(firstProd.id);
+        const defaultQty = stock > 0 ? Math.min(stock, 10) : 0;
         const existingPt = initialRole === 'SALESMAN' && defaultPersonId
           ? salesTargets.find((t) => t.salesmanId === defaultPersonId && t.targetType === 'VALUE')?.productTargets?.find((pt) => pt.productId === firstProd.id)?.targetQuantity
           : undefined;
@@ -73,7 +87,7 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
           {
             id: 'item-1',
             productId: firstProd.id,
-            quantity: 50,
+            quantity: defaultQty,
             targetQuantity: existingPt ?? ''
           }
         ]);
@@ -81,7 +95,7 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
         setItems([]);
       }
     }
-  }, [isOpen, initialPersonId, persons, activeProducts, salesmen, dealers]);
+  }, [isOpen, initialPersonId, persons, activeProducts, salesmen, dealers, getProductStockBase]);
 
   const handleRoleChange = (newRole: 'SALESMAN' | 'DEALER') => {
     setIssueRole(newRole);
@@ -140,6 +154,13 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
 
   const hasTargets = !!dailyTarget || productTargets.length > 0;
 
+  const hasStockError = useMemo(() => {
+    return items.some((it) => {
+      const avail = getProductStockBase(it.productId);
+      return it.quantity > avail;
+    });
+  }, [items, getProductStockBase]);
+
   if (!isOpen) return null;
 
   const handleAddItem = () => {
@@ -147,6 +168,8 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
     const nextProduct = activeProducts.find((p) => !existingProductIds.has(p.id)) || activeProducts[0];
     if (!nextProduct) return;
 
+    const stock = getProductStockBase(nextProduct.id);
+    const defaultQty = stock > 0 ? Math.min(stock, 10) : 0;
     const existingPt = isSalesman && currentPerson
       ? dailyTarget?.productTargets?.find((pt) => pt.productId === nextProduct.id)?.targetQuantity
       : undefined;
@@ -156,7 +179,7 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
       {
         id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         productId: nextProduct.id,
-        quantity: 50,
+        quantity: defaultQty,
         targetQuantity: existingPt ?? ''
       }
     ]);
@@ -195,7 +218,8 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -209,7 +233,7 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
       return;
     }
 
-    // Check duplicate products
+    // Check duplicate products and zero qty
     const seenIds = new Set<string>();
     for (const it of items) {
       if (seenIds.has(it.productId)) {
@@ -223,27 +247,42 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
       }
     }
 
-    // Issue each product quantity
-    items.forEach((it) => {
+    // 1. Strict Stock Check
+    for (const it of items) {
+      const available = getProductStockBase(it.productId);
       const prod = products.find((p) => p.id === it.productId);
-      if (prod) {
-        addQuantityIssue({
-          personId: currentPerson.id,
-          personName: currentPerson.name,
-          personRole: currentPerson.role,
-          productId: prod.id,
-          sku: prod.sku,
-          productName: prod.name,
-          category: prod.category,
-          subCategory: prod.subCategory,
-          brand: prod.brand,
-          uom: prod.uom,
-          quantityIssued: it.quantity,
-          date: issueDate,
-          notes: notes.trim() || undefined
-        });
+      const prodName = prod?.name || 'Selected product';
+      const uom = prod?.salesUOM || prod?.uom || 'Packet';
+      if (it.quantity > available) {
+        const err = `Cannot issue stock: Stock is too low for "${prodName}". Live stock on hand is only ${available} ${uom}, but you requested ${it.quantity} ${uom}. Please reduce the quantity to ${available} or less before issuing.`;
+        setErrorMsg(err);
+        toast.error(`Stock is too low for ${prodName}! Available: ${available}`);
+        return;
       }
+    }
+
+    // 2. Submit ALL items together in one Issue Stock transaction
+    setIsSubmitting(true);
+    const res = await createIssueStockTransaction({
+      personId: currentPerson.id,
+      personName: currentPerson.name,
+      personRole: currentPerson.role,
+      date: issueDate,
+      notes: notes.trim() || undefined,
+      items: items.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+        uom: products.find((p) => p.id === it.productId)?.uom,
+        targetQuantity: it.targetQuantity,
+      })),
     });
+    setIsSubmitting(false);
+
+    if (!res.success) {
+      setErrorMsg(res.error || 'Failed to issue stock.');
+      toast.error(res.error || 'Failed to issue stock.');
+      return;
+    }
 
     // When issuing to salesman, assign/update product target for the salesman if provided
     if (isSalesman && currentPerson) {
@@ -297,6 +336,7 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
       }
     }
 
+    toast.success(`Successfully issued stock to ${currentPerson.name} (${items.length} ${items.length === 1 ? 'item' : 'items'})`);
     if (onSuccess) onSuccess();
     onClose();
   };
@@ -570,99 +610,190 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {items.map((item, idx) => {
                 const prod = products.find((p) => p.id === item.productId);
+                const availableStock = getProductStockBase(item.productId);
+                const isExceeded = item.quantity > availableStock;
+                const isZeroStock = availableStock <= 0;
+
                 return (
                   <div
                     key={item.id}
                     style={{
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
+                      background: isExceeded ? '#fef2f2' : '#f8fafc',
+                      border: `1px solid ${isExceeded ? '#fca5a5' : '#e2e8f0'}`,
                       borderRadius: '8px',
                       padding: '10px 12px',
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      flexWrap: 'wrap'
+                      flexDirection: 'column',
+                      gap: '8px'
                     }}
                   >
-                    <div style={{ flex: isSalesman ? '2 1 170px' : '2 1 200px' }}>
-                      <select
-                        className="select-field"
-                        value={item.productId}
-                        onChange={(e) => handleItemProductChange(idx, e.target.value)}
-                        style={{ height: '42px', fontSize: '0.84rem' }}
-                      >
-                        {activeProducts.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} ({p.sku})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div style={{ flex: isSalesman ? '2 1 170px' : '2 1 200px' }}>
+                        <select
+                          className="select-field"
+                          value={item.productId}
+                          onChange={(e) => handleItemProductChange(idx, e.target.value)}
+                          style={{ height: '42px', fontSize: '0.84rem' }}
+                        >
+                          {activeProducts.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({p.sku})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                    <div style={{ flex: isSalesman ? '1 1 80px' : '1 1 90px', display: 'flex', alignItems: 'center' }}>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        inputMode="decimal"
-                        className="input-field"
-                        placeholder="Issue"
-                        value={item.quantity}
-                        onChange={(e) => handleItemQtyChange(idx, parseFloat(e.target.value) || 0)}
-                        style={{ height: '42px', textAlign: 'center', fontWeight: 700 }}
-                        title="Stock quantity to issue"
-                      />
-                    </div>
-
-                    {isSalesman && (
-                      <div style={{ flex: '1 1 80px', display: 'flex', alignItems: 'center' }}>
+                      <div style={{ flex: isSalesman ? '1 1 80px' : '1 1 90px', display: 'flex', alignItems: 'center' }}>
                         <input
                           type="number"
-                          min="0"
+                          min="0.01"
                           step="0.01"
                           inputMode="decimal"
                           className="input-field"
-                          placeholder="Target"
-                          value={item.targetQuantity ?? ''}
-                          onChange={(e) => handleItemTargetQtyChange(idx, e.target.value)}
+                          placeholder="Issue"
+                          value={item.quantity}
+                          onChange={(e) => handleItemQtyChange(idx, parseFloat(e.target.value) || 0)}
                           style={{
                             height: '42px',
                             textAlign: 'center',
                             fontWeight: 700,
-                            borderColor: '#c7d2fe',
-                            background: '#faf5ff'
+                            borderColor: isExceeded ? '#ef4444' : undefined,
+                            background: isExceeded ? '#ffffff' : undefined
                           }}
-                          title="Sales target quantity for this product"
+                          title="Stock quantity to issue"
                         />
                       </div>
-                    )}
 
-                    {items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(idx)}
+                      {isSalesman && (
+                        <div style={{ flex: '1 1 80px', display: 'flex', alignItems: 'center' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            className="input-field"
+                            placeholder="Target"
+                            value={item.targetQuantity ?? ''}
+                            onChange={(e) => handleItemTargetQtyChange(idx, e.target.value)}
+                            style={{
+                              height: '42px',
+                              textAlign: 'center',
+                              fontWeight: 700,
+                              borderColor: '#c7d2fe',
+                              background: '#faf5ff'
+                            }}
+                            title="Sales target quantity for this product"
+                          />
+                        </div>
+                      )}
+
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          style={{
+                            background: '#fee2e2',
+                            color: '#dc2626',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: '36px',
+                            minHeight: '36px'
+                          }}
+                          title="Remove product"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Stock indicator & Warning row */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '0.74rem' }}>
+                      <span
                         style={{
-                          background: '#fee2e2',
-                          color: '#dc2626',
-                          border: 'none',
-                          borderRadius: '6px',
-                          padding: '8px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          minWidth: '36px',
-                          minHeight: '36px'
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: isZeroStock ? '#fee2e2' : '#ecfdf5',
+                          color: isZeroStock ? '#dc2626' : '#059669',
+                          border: `1px solid ${isZeroStock ? '#fecaca' : '#a7f3d0'}`
                         }}
-                        title="Remove product"
                       >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
+                        {isZeroStock ? 'Out of Stock (0 Available)' : `Live Stock on Hand: ${availableStock} ${prod?.uom || 'Packet'}`}
+                      </span>
+
+                      {isExceeded && (
+                        <span style={{ color: '#dc2626', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={13} />
+                          Exceeds available stock (Max: {availableStock})
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
+
+            {/* Add Product Button below items list so user doesn't have to scroll up */}
+            <div style={{ marginTop: '10px' }}>
+              <button
+                type="button"
+                onClick={handleAddItem}
+                style={{
+                  width: '100%',
+                  background: '#f8fafc',
+                  color: '#4338ca',
+                  border: '1.5px dashed #c7d2fe',
+                  borderRadius: '8px',
+                  padding: '10px 16px',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  minHeight: '42px',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#eef2ff';
+                  e.currentTarget.style.borderColor = '#818cf8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f8fafc';
+                  e.currentTarget.style.borderColor = '#c7d2fe';
+                }}
+              >
+                <Plus size={16} /> + Add Product
+              </button>
+            </div>
+
+            {hasStockError && (
+              <div
+                style={{
+                  marginTop: '12px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: '#fff1f2',
+                  border: '1px solid #fecaca',
+                  color: '#be123c',
+                  fontSize: '0.82rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Stock Too Low:</strong> Requested quantity exceeds live stock for one or more items. Adjust quantities to continue.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Notes / Route (Optional) */}
@@ -684,6 +815,7 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
               type="button"
               className="btn btn-secondary"
               onClick={onClose}
+              disabled={isSubmitting}
               style={{ minHeight: '44px', padding: '0 16px' }}
             >
               Cancel
@@ -691,17 +823,20 @@ export const IssueQuantityModal: React.FC<IssueQuantityModalProps> = ({
             <button
               type="submit"
               className="btn btn-primary"
+              disabled={isSubmitting || hasStockError}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
                 padding: '0 20px',
                 fontWeight: 700,
-                minHeight: '44px'
+                minHeight: '44px',
+                opacity: hasStockError || isSubmitting ? 0.6 : 1,
+                cursor: hasStockError || isSubmitting ? 'not-allowed' : 'pointer'
               }}
             >
               <CheckCircle size={16} />
-              Record Issue ({items.length} {items.length === 1 ? 'item' : 'items'})
+              {isSubmitting ? 'Recording Issue...' : `Record Issue (${items.length} ${items.length === 1 ? 'item' : 'items'})`}
             </button>
           </div>
         </form>

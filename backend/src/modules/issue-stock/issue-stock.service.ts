@@ -124,48 +124,6 @@ export class IssueStockService {
       }
 
       salesmanPersonId = person.id;
-
-      // Verify existing Sales Target for salesman:
-      // Since sales targets are fixed one-time (not given daily), check for issueDate target,
-      // or fallback to the most recent target configured for this salesman.
-      let existingTarget = await prisma.salesTarget.findFirst({
-        where: {
-          salesmanId: salesmanPersonId,
-          targetDate: issueDate,
-        },
-      });
-
-      if (!existingTarget) {
-        existingTarget = await prisma.salesTarget.findFirst({
-          where: {
-            salesmanId: salesmanPersonId,
-            targetDate: { lte: issueDate },
-          },
-          orderBy: { targetDate: 'desc' },
-        });
-      }
-
-      if (!existingTarget) {
-        existingTarget = await prisma.salesTarget.findFirst({
-          where: {
-            salesmanId: salesmanPersonId,
-          },
-          orderBy: { targetDate: 'desc' },
-        });
-      }
-
-      if (!existingTarget) {
-        // Auto-create a base one-time sales target for this salesman so issuing stock is never blocked
-        existingTarget = await prisma.salesTarget.create({
-          data: {
-            salesmanId: salesmanPersonId,
-            targetDate: issueDate,
-            dailyRevenueTarget: new Prisma.Decimal(0),
-            createdBy: createdBy || null,
-            active: true,
-          },
-        });
-      }
     } else if (input.recipientType === IssueRecipientType.DEALER) {
       if (!input.dealerId) {
         throw AppError.badRequest('dealerId is required when recipientType is DEALER');

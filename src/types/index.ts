@@ -254,14 +254,9 @@ export interface PurchaseInvoice {
   notes?: string;
 }
 
-// Quantity Issue (Stock issued by admin to salesman before day's run)
-export interface QuantityIssue {
+// Quantity Issue Item (Individual product within an issue transaction)
+export interface QuantityIssueItem {
   id: string;
-  issueStockId?: string;
-  issueNumber: string;
-  personId: string;
-  personName: string;
-  personRole: 'SALESMAN' | 'DEALER';
   productId: string;
   sku?: string;
   productName: string;
@@ -270,8 +265,32 @@ export interface QuantityIssue {
   brand: string;
   uom: ProductUOM;
   quantityIssued: number;
+  rate?: number;
+  totalValue?: number;
+}
+
+// Quantity Issue (Single transaction header grouping all issued items)
+export interface QuantityIssue {
+  id: string;
+  issueStockId?: string;
+  issueNumber: string;
+  personId: string;
+  personName: string;
+  personRole: 'SALESMAN' | 'DEALER';
   date: string;
   notes?: string;
+  items: QuantityIssueItem[];
+  totalQuantity: number;
+  totalValue: number;
+  // Compatibility fields pointing to primary/summary values
+  productId: string;
+  sku?: string;
+  productName: string;
+  category: ProductCategory;
+  subCategory?: string;
+  brand: string;
+  uom: ProductUOM;
+  quantityIssued: number;
 }
 
 export interface DateRangeFilter {

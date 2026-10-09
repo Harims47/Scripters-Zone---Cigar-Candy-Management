@@ -13,6 +13,7 @@ import {
   StockInRecord,
   PurchaseInvoice,
   QuantityIssue,
+  QuantityIssueItem,
   UserRole,
   AttendanceRecord,
   AttendanceStatus,
@@ -138,6 +139,19 @@ export interface HubContextType {
 
   // Quantity Issue Actions
   addQuantityIssue: (issue: Omit<QuantityIssue, 'id' | 'issueNumber'>) => QuantityIssue;
+  createIssueStockTransaction: (input: {
+    personId: string;
+    personName: string;
+    personRole: 'SALESMAN' | 'DEALER';
+    date: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      quantity: number;
+      uom?: string;
+      targetQuantity?: number | string;
+    }>;
+  }) => Promise<{ success: boolean; error?: string }>;
   deleteQuantityIssue: (id: string) => void;
 
   // Phase 2: Attendance Actions
@@ -357,26 +371,56 @@ const mapBackendIssueStockList = (issues: BackendIssueStock[], prods: Product[] 
     const personRole = issue.recipientType as 'SALESMAN' | 'DEALER';
     const date = safeDate(issue.issueDate);
 
+    const items: QuantityIssueItem[] = [];
+    let totalQty = 0;
+    let totalVal = 0;
+
     for (const it of issue.items || []) {
       const p = prods.find((prod) => prod.id === it.productId);
-      result.push({
+      const qty = Number(it.quantity || 0);
+      const rate = p?.rate || Number(it.salesRate || 0);
+      const val = Number(it.issuedValue !== undefined ? it.issuedValue : qty * rate);
+      totalQty += qty;
+      totalVal += val;
+
+      items.push({
         id: it.id || `${issue.id}-${it.productId}`,
-        issueStockId: issue.id,
-        issueNumber: issueNum,
-        personId,
-        personName,
-        personRole,
         productId: it.productId,
         sku: p?.sku,
         productName: it.product?.name || it.productName || p?.name || '',
         category: p?.category || 'Candy',
         subCategory: p?.subCategory,
         brand: p?.brand || '',
-        uom: it.uom,
-        quantityIssued: Number(it.quantity),
-        date,
+        uom: (it.uom || p?.uom || 'Packet') as ProductUOM,
+        quantityIssued: qty,
+        rate,
+        totalValue: val,
       });
     }
+
+    const firstItem = items[0];
+
+    result.push({
+      id: issue.id,
+      issueStockId: issue.id,
+      issueNumber: issueNum,
+      personId,
+      personName,
+      personRole,
+      date,
+      notes: (issue as any).notes || undefined,
+      items,
+      totalQuantity: totalQty,
+      totalValue: Number(issue.totalIssuedValue) || totalVal,
+      productId: firstItem?.productId || '',
+      sku: firstItem?.sku,
+      productName: firstItem?.productName || '',
+      category: firstItem?.category || 'Candy',
+      subCategory: firstItem?.subCategory,
+      brand: firstItem?.brand || '',
+      uom: firstItem?.uom || 'Packet',
+      quantityIssued: totalQty,
+    });
   }
   return result;
 };
@@ -1133,33 +1177,151 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addQuantityIssue = (issue: Omit<QuantityIssue, 'id' | 'issueNumber'>): QuantityIssue => {
-    const tempNumber = `ISS-${Date.now().toString().slice(-6)}`;
+  const createIssueStockTransaction = async (input: {
+    personId: string;
+    personName: string;
+    personRole: 'SALESMAN' | 'DEALER';
+    date: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      quantity: number;
+      uom?: string;
+      targetQuantity?: number | string;
+    }>;
+  }): Promise<{ success: boolean; error?: string }> => {
+    // 1. Strict Stock on Hand Validation
+    for (const it of input.items) {
+      const available = getProductStockBase(it.productId);
+      const prod = products.find((p) => p.id === it.productId);
+      const prodName = prod?.name || 'Selected product';
+      const uomLabel = prod?.salesUOM || prod?.uom || prod?.baseUOM || 'Packet';
+      if (it.quantity > available) {
+        const errorMsg = `Insufficient stock for "${prodName}". Live stock on hand is ${available} ${uomLabel}, but you requested ${it.quantity} ${uomLabel}. Cannot issue stock when stock is too low.`;
+        setError(errorMsg);
+        return {
+          success: false,
+          error: errorMsg,
+        };
+      }
+    }
+
+    // 2. Optimistic Update (One Issue Header with all items)
     const tempId = `iss-temp-${Date.now()}`;
-    const optimistic: QuantityIssue = { ...issue, id: tempId, issueNumber: tempNumber };
+    const tempNumber = `ISS-${input.date.replace(/-/g, '')}-${tempId.slice(-4)}`;
+
+    const mappedItems: QuantityIssueItem[] = input.items.map((it, idx) => {
+      const prod = products.find((p) => p.id === it.productId);
+      const rate = prod?.rate || 0;
+      const qty = Number(it.quantity || 0);
+      return {
+        id: `iss-item-temp-${Date.now()}-${idx}`,
+        productId: it.productId,
+        sku: prod?.sku,
+        productName: prod?.name || '',
+        category: prod?.category || 'Candy',
+        subCategory: prod?.subCategory,
+        brand: prod?.brand || '',
+        uom: (it.uom || prod?.uom || 'Packet') as ProductUOM,
+        quantityIssued: qty,
+        rate,
+        totalValue: qty * rate,
+      };
+    });
+
+    const totalQty = mappedItems.reduce((sum, item) => sum + item.quantityIssued, 0);
+    const totalVal = mappedItems.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+    const firstItem = mappedItems[0];
+
+    const optimistic: QuantityIssue = {
+      id: tempId,
+      issueStockId: tempId,
+      issueNumber: tempNumber,
+      personId: input.personId,
+      personName: input.personName,
+      personRole: input.personRole,
+      date: input.date,
+      notes: input.notes,
+      items: mappedItems,
+      totalQuantity: totalQty,
+      totalValue: totalVal,
+      productId: firstItem?.productId || '',
+      sku: firstItem?.sku,
+      productName: firstItem?.productName || '',
+      category: firstItem?.category || 'Candy',
+      subCategory: firstItem?.subCategory,
+      brand: firstItem?.brand || '',
+      uom: firstItem?.uom || 'Packet',
+      quantityIssued: totalQty,
+    };
+
     setQuantityIssues((prev) => [optimistic, ...prev]);
 
-    const uomRaw = issue.uom || 'JAR';
-    const uomBackend = uomRaw.toUpperCase() === 'POCKET' ? 'PACKET' : uomRaw.toUpperCase();
-
-    IssueStockService.createIssueStock({
-      recipientType: issue.personRole,
-      salesmanId: issue.personRole === 'SALESMAN' ? issue.personId : undefined,
-      dealerId: issue.personRole === 'DEALER' ? issue.personId : undefined,
-      issueDate: issue.date,
-      items: [{
-        productId: issue.productId,
-        quantity: issue.quantityIssued,
-        uom: uomBackend as any,
-      }],
-    })
-      .then(() => refreshAll())
-      .catch((err) => {
-        setQuantityIssues((prev) => prev.filter((i) => i.id !== tempId));
-        console.error('Failed to issue stock:', err.message);
+    try {
+      const payloadItems = input.items.map((it) => {
+        const prod = products.find((p) => p.id === it.productId);
+        const uomRaw = it.uom || prod?.salesUOM || prod?.uom || 'PACKET';
+        const uomBackend = uomRaw.toUpperCase() === 'POCKET' ? 'PACKET' : uomRaw.toUpperCase();
+        return {
+          productId: it.productId,
+          quantity: it.quantity,
+          uom: uomBackend,
+        };
       });
 
-    return optimistic;
+      await IssueStockService.createIssueStock({
+        recipientType: input.personRole,
+        salesmanId: input.personRole === 'SALESMAN' ? input.personId : undefined,
+        dealerId: input.personRole === 'DEALER' ? input.personId : undefined,
+        issueDate: input.date,
+        items: payloadItems,
+      });
+
+      await refreshAll();
+      clearError();
+      return { success: true };
+    } catch (err: any) {
+      setQuantityIssues((prev) => prev.filter((i) => i.id !== tempId));
+      console.error('Failed to issue stock:', err);
+      const msg = err.message || 'Failed to issue stock';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+  };
+
+  const addQuantityIssue = (issue: Omit<QuantityIssue, 'id' | 'issueNumber'>): QuantityIssue => {
+    const items = issue.items && issue.items.length > 0
+      ? issue.items.map((it) => ({
+          productId: it.productId,
+          quantity: it.quantityIssued,
+          uom: it.uom,
+        }))
+      : [{
+          productId: issue.productId,
+          quantity: issue.quantityIssued,
+          uom: issue.uom,
+        }];
+
+    createIssueStockTransaction({
+      personId: issue.personId,
+      personName: issue.personName,
+      personRole: issue.personRole,
+      date: issue.date,
+      notes: issue.notes,
+      items,
+    });
+
+    const tempNumber = `ISS-${issue.date.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
+    const tempId = `iss-temp-${Date.now()}`;
+    return {
+      ...issue,
+      id: tempId,
+      issueStockId: tempId,
+      issueNumber: tempNumber,
+      items: issue.items || [],
+      totalQuantity: issue.quantityIssued || 0,
+      totalValue: issue.totalValue || 0,
+    };
   };
 
   const addHandover = (h: Omit<DailyHandover, 'id' | 'handoverNumber' | 'createdAt'>): DailyHandover => {
@@ -1698,6 +1860,7 @@ export const HubProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updatePerson,
         deletePerson,
         addQuantityIssue,
+        createIssueStockTransaction,
         deleteQuantityIssue,
         markAttendance,
         bulkMarkAttendance,
